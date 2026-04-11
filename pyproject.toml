@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "urbantransit"
+version = "0.1.0"
+description = "Urban transit tools"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "Vincent Tinet" }
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/urbantransit"]
