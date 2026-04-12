@@ -1,5 +1,5 @@
 [workspace]
-authors = ["Vincent Tinet <vincent@example.com>"]
+authors = ["Vincent Tinet <vincenttinet@mac.com"]
 channels = ["conda-forge", "https://prefix.dev/urbandev"]
 name = "urbantransit"
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
