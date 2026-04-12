@@ -11,7 +11,7 @@ __all__ = [
     "first_point",
     "last_point",
     "pairs",
-    "random_ints",
+    "random_ids",
     "hash_id",
     "intersect_ids",
     "renumber_ids",
@@ -36,7 +36,7 @@ from .spatial import (
 )
 
 from .ids import (
-    random_ints,
+    random_ids,
     hash_id,
     intersect_ids,
     renumber_ids,
