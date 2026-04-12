@@ -1,12 +1,13 @@
 [workspace]
 authors = ["Vincent Tinet <vincenttinet@mac.com"]
-channels = ["conda-forge", "https://prefix.dev/urbandev"]
 name = "urbantransit"
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/urbandev"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
-version = "0.1.0"
+preview = ["pixi-build"]
 
 [tasks]
 run = "python -m urbantransit"
+package = "python -m build"
 
 [dependencies]
 python = ">=3.14.4,<3.15"
@@ -20,3 +21,14 @@ listandstruct = ">=0.0.2,<0.0.3"
 [pypi-dependencies]
 urbantransit = { path = ".", editable = true }
 ruff = ">=0.15.10, <0.16"
+build = ">=1.2.2, <2"
+
+[package] 
+name = "urbantransit"
+version = "0.1.0"
+
+[package.host-dependencies]
+hatchling = "*"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
