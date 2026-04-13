@@ -18,7 +18,7 @@ from urbantransit.utils.spatial import (
     connect_points,
 )
 from .gtfs_parser import GTFSParser
-from .gtfs_utils import LAST_STOP
+from .constants import LAST_STOP
 
 from urbantransit.utils.logging import transitlog
 

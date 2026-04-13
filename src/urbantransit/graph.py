@@ -1,16 +1,19 @@
 import itertools
+from typing import TYPE_CHECKING
 import pandas as pd
 import geopandas as gpd
 import shapely
 
-from urbantransit.transit import Lines, Transfers
 from urbantransit.utils.time import DayTime
 from urbantransit.utils.logging import transitlog
-from urbantransit.gtfs_utils import LAST_STOP
+from urbantransit.constants import LAST_STOP
+
+if TYPE_CHECKING:
+    from urbantransit.transit import Lines, Transfers
 
 
 class TransitGraph:
-    def __init__(self, lines: Lines, transfers: Transfers, crs: str):
+    def __init__(self, lines: "Lines", transfers: "Transfers", crs: str):
         self.crs = crs
         self.lines = lines
         self.transfers = transfers
@@ -22,7 +25,7 @@ class TransitGraph:
         self.search_results = {}
         return None
 
-    def make_line_cache(self, lines: Lines) -> dict:
+    def make_line_cache(self, lines: "Lines") -> dict:
         """return the maximum stop_sequence in lines under 65535"""
         df = lines.data.copy()
         df = df.loc[df.stop_sequence < LAST_STOP]

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
 import pyarrow.parquet as pq
@@ -10,13 +10,15 @@ import listandstruct as ls
 
 from sklearn.cluster import DBSCAN
 
-from urbantransit.utils.spatial import first_point, last_point, group_boundingbox, pairs
-from urbantransit.utils.ids import filter_ids
-from urbantransit.utils.time import DayTime, WEEKDAYS
-from urbantransit.utils.logging import transitlog
-from urbantransit.utils.time import seconds_to_text, day_from_seconds
-from urbantransit.graph import TransitGraph
-from urbantransit.gtfs_utils import LAST_STOP
+from .utils.spatial import first_point, last_point, group_boundingbox, pairs
+from .utils.ids import filter_ids
+from .utils.time import DayTime, WEEKDAYS
+from .utils.logging import transitlog
+from .utils.time import seconds_to_text, day_from_seconds
+from .constants import LAST_STOP
+
+if TYPE_CHECKING:
+    from .graph import TransitGraph
 
 
 DISTANCE_TYPE = float | pd.Series | dict[str, float]
@@ -878,8 +880,10 @@ class Transit:
     # ----------------------------------------------------------------------
     # Graph creation
 
-    def graph(self):
+    def graph(self) -> "TransitGraph":
         """Return a Graph object"""
+        from .graph import TransitGraph
+
         return TransitGraph(self.lines, self.transfers, self.crs)
 
     # ----------------------------------------------------------------------

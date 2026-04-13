@@ -5,10 +5,10 @@ import pandas as pd
 from .utils.logging import transitlog
 from .gtfs_parser import GTFSParser
 from .gtfs_to_parquet import GTFStoParquet
+from .constants import LAST_STOP
 
-LAST_STOP = 65355
 
-
+# This file contains utilities to process GTFS files, including cleaning and parsing them concurrently.
 # ---------------------------------------------------
 # top level functions
 
