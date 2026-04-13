@@ -12,7 +12,7 @@ __all__ = [
     "last_point",
     "pairs",
     "random_ids",
-    "hash_id",
+    "hash_ids",
     "intersect_ids",
     "renumber_ids",
     "filter_ids",
@@ -37,7 +37,7 @@ from .spatial import (
 
 from .ids import (
     random_ids,
-    hash_id,
+    hash_ids,
     intersect_ids,
     renumber_ids,
     filter_ids,
