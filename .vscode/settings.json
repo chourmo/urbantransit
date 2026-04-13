@@ -1,0 +1,6 @@
+{
+    "python.defaultInterpreterPath": ".pixi/envs/default/bin/python",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none"
+    }
+}
