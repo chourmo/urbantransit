@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Tuple
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+
 import pandas as pd
 
 WEEKDAYS = [
@@ -17,7 +17,7 @@ WEEKDAYS = [
 def _week_year_epoch(year: int, week: int) -> int:
     """Calculate the Unix timestamp for Monday at 0:00 for a given ISO year and week."""
     # January 4th of any year is always in ISO week 1
-    jan_4 = datetime(year, 1, 4)
+    jan_4 = datetime(year, 1, 4, tzinfo=UTC)
 
     # Find the Monday of week 1
     # weekday(): Monday=0, Sunday=6
@@ -29,7 +29,7 @@ def _week_year_epoch(year: int, week: int) -> int:
     target_monday = week_1_monday + timedelta(weeks=week - 1)
 
     # Convert to Unix timestamp (assuming UTC)
-    epoch = datetime(1970, 1, 1)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     unix_timestamp = int((target_monday - epoch).total_seconds())
 
     return unix_timestamp
@@ -106,7 +106,7 @@ class DayTime:
         return list.index(self.WEEKDAYS, self.day)
 
     @staticmethod
-    def decompose(seconds: int) -> Tuple[int, int, int, int]:
+    def decompose(seconds: int) -> tuple[int, int, int, int]:
         """Decompose a seconds integer to a tuple of day, hours, minutes, seconds"""
         day = seconds // (24 * 3600)
         hours = (seconds - day * 24 * 3600) // 3600

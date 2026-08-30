@@ -1,14 +1,14 @@
-from pathlib import Path
-from typing import Optional, Tuple, Any
-import zipfile
 import io
+import zipfile
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pyarrow as pa
+from geometryhelpers import geographic_distance
 from pyarrow import csv
 
 from .utils.logging import transitlog
-from .utils.spatial import geographic_distance
 
 
 class GTFSParser:
@@ -49,10 +49,10 @@ class GTFSParser:
 
     def _filenames(self):
         if self.is_dir():
-            return set([f.name for f in self.path.iterdir() if f.is_file()])
+            return {f.name for f in self.path.iterdir() if f.is_file()}
         if self.is_zip():
             with zipfile.ZipFile(self.path, "r") as archive:
-                files = set([x for x in archive.namelist()])
+                files = {x for x in archive.namelist()}
             return files
 
     def has_required_files(self):
@@ -63,10 +63,7 @@ class GTFSParser:
             return False
 
         # test if either calendar.txt or calendar_dates.txt exist
-        if "calendar.txt" in self.files or "calendar_dates.txt" in self.files:
-            return True
-
-        return False
+        return "calendar.txt" in self.files or "calendar_dates.txt" in self.files
 
     def calendar_statistics(self):
         """return a dataframe of week, year and number of trips"""
@@ -184,11 +181,11 @@ class GTFSParser:
 
         if self.is_zip():
             with zipfile.ZipFile(self.path, "r") as archive:
-                path = [
+                path = next(
                     x
                     for x in archive.namelist()
                     if zipfile.Path(archive, x).name == name
-                ][0]
+                )
                 with archive.open(path) as f:
                     array = csv.read_csv(
                         f, convert_options=convert, parse_options=parse
@@ -205,32 +202,31 @@ class GTFSParser:
         if self.is_dir():
             for filename, parser in mapper.items():
                 parser.to_file(self.path / filename)
-            return None
 
         # extract files from zip in temporary folder
         temp_path = self.path.with_stem(self.path.stem + "_temp")
 
-        with zipfile.ZipFile(self.path, "r") as archive:
-            with zipfile.ZipFile(
+        with (
+            zipfile.ZipFile(self.path, "r") as archive,
+            zipfile.ZipFile(
                 temp_path, "w", compression=zipfile.ZIP_BZIP2, compresslevel=8
-            ) as new_archive:
-                # save new files
-                for filename, parser in mapper.items():
-                    stream = io.StringIO()
-                    parser.to_file(stream)
-                    new_archive.writestr(
-                        zipfile.Path(archive, filename).name, stream.getvalue()
-                    )
+            ) as new_archive,
+        ):
+            # save new files
+            for filename, parser in mapper.items():
+                stream = io.StringIO()
+                parser.to_file(stream)
+                new_archive.writestr(
+                    zipfile.Path(archive, filename).name, stream.getvalue()
+                )
 
-                # copy unmodified files
-                for file in [x for x in archive.namelist() if x not in mapper.keys()]:
-                    new_archive.writestr(
-                        zipfile.Path(archive, file).name, archive.open(file).read()
-                    )
+            # copy unmodified files
+            for file in [x for x in archive.namelist() if x not in mapper]:
+                new_archive.writestr(
+                    zipfile.Path(archive, file).name, archive.open(file).read()
+                )
 
         self.path = temp_path.replace(self.path)
-
-        return None
 
     # ----------------------------------------------------------------------------------
     # global test and fix functions
@@ -264,27 +260,25 @@ class GTFSParser:
 
     def fix_dir_in_zip(self):
         if not self.is_zip() or not self.has_inner_folder():
-            return None
+            return None  # noqa: RET501
 
         # extract files from zip in temporary folder
         temp_path = self.path.with_stem(self.path.stem + "_temp")
 
-        with zipfile.ZipFile(self.path, "r") as archive:
-            with zipfile.ZipFile(
+        with (
+            zipfile.ZipFile(self.path, "r") as archive,
+            zipfile.ZipFile(
                 temp_path, "w", compression=zipfile.ZIP_BZIP2, compresslevel=8
-            ) as new_archive:
-                for file in [
-                    x
-                    for x in archive.namelist()
-                    if not zipfile.Path(archive, x).is_dir()
-                ]:
-                    new_archive.writestr(
-                        zipfile.Path(archive, file).name, archive.open(file).read()
-                    )
+            ) as new_archive,
+        ):
+            for file in [
+                x for x in archive.namelist() if not zipfile.Path(archive, x).is_dir()
+            ]:
+                new_archive.writestr(
+                    zipfile.Path(archive, file).name, archive.open(file).read()
+                )
 
         self.path = temp_path.replace(self.path)
-
-        return None
 
 
 # ----------------------------------------------------------------------------------
@@ -296,15 +290,15 @@ class GTFSFileParser:
 
     def __init__(
         self,
-        df: Optional[pd.DataFrame],
+        df: pd.DataFrame | None,
         filename: str,
         spec: dict[str, Any],
-        defaults: Optional[dict[str, Any]] = None,
-        boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None,
+        defaults: dict[str, Any] | None = None,
+        boolean_cols: dict[str, tuple[Any, Any, Any]] | None = None,
         is_required: bool = True,
-        unique_id: Optional[str] = None,
+        unique_id: str | None = None,
         file_type="csv",
-        base_name: Optional[str] = None,
+        base_name: str | None = None,
     ):
         """Init from a dataframe, drop columns not in spec or defaults
             - if is_required is True and df is None, raise an error
@@ -354,8 +348,6 @@ class GTFSFileParser:
         df = self.set_defaults(df, spec, defaults)
         self.data = df
 
-        return None
-
     def empty_frame(self):
         """return an empty dataframe with spec columns and defaults values"""
 
@@ -363,7 +355,7 @@ class GTFSFileParser:
         return schema.empty_table().to_pandas(types_mapper=pd.ArrowDtype)
 
     def set_defaults(
-        self, df: pd.Series, spec: dict[str, Any], defaults: Optional[dict[str, Any]]
+        self, df: pd.DataFrame, spec: dict[str, Any], defaults: dict[str, Any] | None
     ) -> pd.DataFrame:
         """Set options for the DataFrame based on options and dtypes"""
 
@@ -373,7 +365,7 @@ class GTFSFileParser:
         else:
             return res.loc[:, res.columns.isin(spec.keys())]
 
-        new_cols = [col for col in defaults.keys() if col not in res.columns]
+        new_cols = [col for col in defaults if col not in res.columns]
 
         for col in new_cols:
             res[col] = pd.Series(data=defaults[col], dtype=spec[col][1])
@@ -418,15 +410,13 @@ class GTFSFileParser:
         if self.file_type == "csv":
             df.to_csv(path_or_buf, sep=",", index=False)
 
-        return None
-
 
 class GTFSAgencyParser(GTFSFileParser):
     """Class to parse GTFS Agency.txt file"""
 
     filename: str = "agency.txt"
     is_required: bool = True
-    unique_id: Optional[str] = "agency_id"
+    unique_id: str | None = "agency_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -440,9 +430,9 @@ class GTFSAgencyParser(GTFSFileParser):
         "agency_email": pa.string(),
     }
     defaults: dict[str, Any] = {"agency_id": 1}  # Default agency_id is missings
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -454,7 +444,6 @@ class GTFSAgencyParser(GTFSFileParser):
         )
 
         self.base_name = base_name
-        return None
 
 
 class GTFSRoutesParser(GTFSFileParser):
@@ -462,7 +451,7 @@ class GTFSRoutesParser(GTFSFileParser):
 
     filename: str = "routes.txt"
     is_required: bool = True
-    unique_id: Optional[str] = "route_id"
+    unique_id: str | None = "route_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -485,9 +474,9 @@ class GTFSRoutesParser(GTFSFileParser):
         "continuous_drop_off": 0,
         "route_sort_order": 0,
     }
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -500,15 +489,13 @@ class GTFSRoutesParser(GTFSFileParser):
 
         self.base_name = base_name
 
-        return None
-
 
 class GTFSStopsParser(GTFSFileParser):
     """Class to parse GTFS Stops.txt file"""
 
     filename: str = "stops.txt"
     is_required: bool = True
-    unique_id: Optional[str] = "stop_id"
+    unique_id: str | None = "stop_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -531,11 +518,9 @@ class GTFSStopsParser(GTFSFileParser):
         "location_type": 0,
         "wheelchair_boarding": 0,
     }
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = {
-        "wheelchair_boarding": (1, 2, 0)
-    }
+    boolean_cols: dict[str, tuple[Any, Any]] | None = {"wheelchair_boarding": (1, 2, 0)}
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -546,7 +531,6 @@ class GTFSStopsParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
     def fix_codes(self) -> None:
         """Fix stop_code and stop_id columns if they are mixed"""
@@ -554,13 +538,12 @@ class GTFSStopsParser(GTFSFileParser):
         df = self.data
 
         if "stop_code" not in df.columns:
-            return None
+            return None  # noqa: RET501
 
         # swap stop_code and stop_id
         df = df.rename(columns={"stop_code": "stop_id", "stop_id": "stop_code"})
 
         self.data = df
-        return None
 
 
 class GTFSTripsParser(GTFSFileParser):
@@ -568,7 +551,7 @@ class GTFSTripsParser(GTFSFileParser):
 
     filename: str = "trips.txt"
     is_required: bool = True
-    unique_id: Optional[str] = "trip_id"
+    unique_id: str | None = "trip_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -593,13 +576,13 @@ class GTFSTripsParser(GTFSFileParser):
         "wheelchair_accessible": 0,
         "bikes_allowed": 0,
     }
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = {
+    boolean_cols: dict[str, tuple[Any, Any]] | None = {
         "bikes_allowed": (1, 2, 0),
         "wheelchair_accessible": (1, 2, 0),
         "cars_allowed": (1, 2, 0),
     }
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -610,7 +593,6 @@ class GTFSTripsParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
 
 class GTFSStopTimesParser(GTFSFileParser):
@@ -618,7 +600,7 @@ class GTFSStopTimesParser(GTFSFileParser):
 
     filename: str = "stop_times.txt"
     is_required: bool = True
-    unique_id: Optional[str] = None
+    unique_id: str | None = None
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -635,10 +617,10 @@ class GTFSStopTimesParser(GTFSFileParser):
         "shape_dist_traveled": pa.float32(),
         "timepoint": pa.bool_(),
     }
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
-    defaults: Optional[dict[str, Any]] = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
+    defaults: dict[str, Any] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -649,7 +631,6 @@ class GTFSStopTimesParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
     def set_sequence_id(
         self, id: str = "trip_id", name: str = "seq_id"
@@ -687,12 +668,10 @@ class GTFSStopTimesParser(GTFSFileParser):
             )
 
         self.data = df
-        return None
 
     def fill_missing_times(self) -> None:
         """Fill missing departure or arrival times - NOT IMPLEMENTED"""
-
-        return None
+        raise NotImplementedError("fill_missing_times method is not implemented")
 
     def drop_single_sequence(self, sequence_id: str = "seq_id") -> None:
         """Drop sequences with only one stop_sequence"""
@@ -715,8 +694,6 @@ class GTFSStopTimesParser(GTFSFileParser):
             df = df.loc[~df[sequence_id].isin(sequence.index)]
 
         self.data = df.loc[~df[sequence_id].isin(sequence.index)]
-
-        return None
 
     def drop_invalid_shapedist(self) -> None:
         """Replace shape_dist_traveled by na if non increasing values"""
@@ -759,7 +736,6 @@ class GTFSStopTimesParser(GTFSFileParser):
             )
 
         self.data = df
-        return None
 
 
 class GTFSCalendarParser(GTFSFileParser):
@@ -767,7 +743,7 @@ class GTFSCalendarParser(GTFSFileParser):
 
     filename: str = "calendar.txt"
     is_required: bool = False
-    unique_id: Optional[str] = "service_id"
+    unique_id: str | None = "service_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -782,8 +758,8 @@ class GTFSCalendarParser(GTFSFileParser):
         "start_date": pa.timestamp("s"),  # pa.date32(),
         "end_date": pa.timestamp("s"),  # pa.date32(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
     WEEKDAYS = [
         "monday",
@@ -795,7 +771,7 @@ class GTFSCalendarParser(GTFSFileParser):
         "sunday",
     ]
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -806,7 +782,6 @@ class GTFSCalendarParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
     def expand(self) -> pd.Series:
         """expand calendar to individual dates"""
@@ -841,7 +816,7 @@ class GTFSCalendarParser(GTFSFileParser):
         calendar = calendar.drop(columns=["_shift", "start_date", "end_date", "days"])
 
         calendar["_dayofweek"] = calendar["date"].dt.dayofweek
-        day_map = {num: day for num, day in zip(range(0, 7), self.WEEKDAYS)}
+        day_map = {num: day for num, day in zip(range(7), self.WEEKDAYS)}
         calendar["_dayofweek"] = calendar["_dayofweek"].map(day_map)
 
         mask = pd.Series(False, index=calendar.index)
@@ -864,7 +839,7 @@ class GTFSCalendarParser(GTFSFileParser):
         mask = df["start_date"] > df["end_date"]
         return mask.any()
 
-    def fix_start_end_dates(self) -> Optional[pd.DataFrame]:
+    def fix_start_end_dates(self) -> pd.DataFrame | None:
         """Validate that start_date is before end_date, reverse start and end dates if not"""
 
         if self.data is None:
@@ -890,7 +865,7 @@ class GTFSCalendarDatesParser(GTFSFileParser):
 
     filename: str = "calendar_dates.txt"
     is_required: bool = False
-    unique_id: Optional[str] = "service_id"
+    unique_id: str | None = "service_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -898,10 +873,10 @@ class GTFSCalendarDatesParser(GTFSFileParser):
         "date": pa.timestamp("s"),  # pa.date32(),
         "exception_type": pa.uint8(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -912,7 +887,6 @@ class GTFSCalendarDatesParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
 
 class GTFSShapesParser(GTFSFileParser):
@@ -920,7 +894,7 @@ class GTFSShapesParser(GTFSFileParser):
 
     filename: str = "shapes.txt"
     is_required: bool = False
-    unique_id: Optional[str] = "shape_id"
+    unique_id: str | None = "shape_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -930,10 +904,10 @@ class GTFSShapesParser(GTFSFileParser):
         "shape_pt_sequence": pa.uint32(),
         "shape_dist_traveled": pa.float32(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -944,7 +918,6 @@ class GTFSShapesParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
     def filter_shape_ids(self, shape_ids: pd.Series) -> None:
         """Filter shapes to keep only specified shape_ids"""
@@ -957,9 +930,8 @@ class GTFSShapesParser(GTFSFileParser):
             raise ValueError("No shapes found for specified shape_ids")
 
         self.data = df
-        return None
 
-    def has_single_point(self) -> Optional[pd.Series]:
+    def has_single_point(self) -> pd.Series | None:
         """return shape_ids with only one point, return None if no shape data"""
         if self.data is None:
             return None
@@ -971,7 +943,7 @@ class GTFSShapesParser(GTFSFileParser):
     def drop_single_point(self) -> None:
         """drop shapes with only one point"""
         if self.data is None:
-            return None
+            return None  # noqa: RET501
         singles = self.has_single_point()
 
         if len(singles) > 0:
@@ -981,7 +953,6 @@ class GTFSShapesParser(GTFSFileParser):
 
         df = self.data.loc[~self.data.shape_id.isin(singles)]
         self.data = df
-        return None
 
     def fill_shape_dist(self) -> None:
         """Add missing shape_distances"""
@@ -1005,15 +976,13 @@ class GTFSShapesParser(GTFSFileParser):
 
         self.data = shp
 
-        return None
-
 
 class GTFSFeedInfoParser(GTFSFileParser):
     """Class to parse GTFS FeedInfo.txt file"""
 
     filename: str = "feed_info"
     is_required: bool = False
-    unique_id: Optional[str] = None
+    unique_id: str | None = None
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -1027,10 +996,10 @@ class GTFSFeedInfoParser(GTFSFileParser):
         "feed_contact_email": pa.string(),
         "feed_contact_url": pa.string(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -1041,7 +1010,6 @@ class GTFSFeedInfoParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
 
 class GTFSTransfersParser(GTFSFileParser):
@@ -1049,7 +1017,7 @@ class GTFSTransfersParser(GTFSFileParser):
 
     filename: str = "transfers"
     is_required: bool = False
-    unique_id: Optional[str] = None
+    unique_id: str | None = None
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -1062,10 +1030,10 @@ class GTFSTransfersParser(GTFSFileParser):
         "transfer_type": pa.uint8(),
         "min_transfer_time": pa.uint16(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -1076,7 +1044,6 @@ class GTFSTransfersParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None
 
 
 class GTFSLevelsParser(GTFSFileParser):
@@ -1084,7 +1051,7 @@ class GTFSLevelsParser(GTFSFileParser):
 
     filename: str = "levels"
     is_required: bool = False
-    unique_id: Optional[str] = "level_id"
+    unique_id: str | None = "level_id"
     file_type = "csv"
 
     spec: dict[str, Any] = {
@@ -1092,10 +1059,10 @@ class GTFSLevelsParser(GTFSFileParser):
         "level_index": pa.int16(),
         "level_name": pa.string(),
     }
-    defaults: Optional[dict[str, Any]] = None
-    boolean_cols: Optional[dict[str, Tuple[Any, Any]]] = None
+    defaults: dict[str, Any] | None = None
+    boolean_cols: dict[str, tuple[Any, Any]] | None = None
 
-    def __init__(self, df: pd.DataFrame, base_name: Optional[str] = None):
+    def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
@@ -1106,4 +1073,3 @@ class GTFSLevelsParser(GTFSFileParser):
             file_type=self.file_type,
         )
         self.base_name = base_name
-        return None

@@ -1,21 +1,19 @@
 from pathlib import Path
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-import pandas as pd
-import pyarrow.parquet as pq
-import pyarrow.dataset as ds
-import pyarrow as pa
 import geopandas as gpd
 import listandstruct as ls
-
+import pandas as pd
+import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+from geometryhelpers import first_point, group_boundingbox, last_point, pairs
 from sklearn.cluster import DBSCAN
 
-from .utils.spatial import first_point, last_point, group_boundingbox, pairs
-from .utils.ids import filter_ids
-from .utils.time import DayTime, WEEKDAYS
-from .utils.logging import transitlog
-from .utils.time import seconds_to_text, day_from_seconds
 from .constants import LAST_STOP
+from .utils.ids import filter_ids
+from .utils.logging import transitlog
+from .utils.time import WEEKDAYS, DayTime, day_from_seconds, seconds_to_text
 
 if TYPE_CHECKING:
     from .graph import TransitGraph
@@ -160,8 +158,6 @@ class Agencies:
         bbox = group_boundingbox(points, groupby=self.gid)
         self.data = self.data.merge(bbox, how="left")
 
-        return None
-
 
 class Stops:
     """Class representing transit stops based on Arrow GTFS specification"""
@@ -231,7 +227,6 @@ class Stops:
         else:
             data = self.data
         data.to_parquet(path / self.FILE, index=False)
-        return None
 
     def filter_gids(self, gids) -> "Stops":
         """Return a new Stops object only with gids"""
@@ -304,7 +299,6 @@ class Lines:
             data = self.data
 
         data.to_parquet(path / self.FILE, index=False)
-        return None
 
     def drop_on_demand(self) -> "Lines":
         data = self.data
@@ -595,7 +589,7 @@ class Transfers:
 
         if isinstance(distance, dict):
             if "route_type" not in df.columns:
-                raise ValueError(
+                raise TypeError(
                     "If distance is a dict, route_type column must be present in lines"
                 )
             dist = df["route_type"].map(distance)
@@ -606,7 +600,7 @@ class Transfers:
         elif isinstance(distance, (int, float)):
             return pd.Series(float(distance), index=df.index)
         else:
-            raise ValueError("distance must be either a dict or a numeric value")
+            raise TypeError("distance must be either a dict or a numeric value")
 
     @classmethod
     def from_parquet(
@@ -629,7 +623,7 @@ class Transfers:
         df = table.to_pandas(types_mapper=pd.ArrowDtype)
         return cls(df, min_transfer, max_transfer, dists, crs)
 
-    def to_parquet(self, path: Path, name: Optional[str] = None):
+    def to_parquet(self, path: Path, name: str | None = None):
         """save data to parquet at path with GTFS metadata"""
         table = pa.Table.from_pandas(self.data, index=False)
         metadata = table.schema.metadata
@@ -719,7 +713,7 @@ class Transit:
         lines: Lines,
         stops: Stops,
         agencies: Agencies,
-        transfers: Optional[Transfers] = None,
+        transfers: Transfers | None = None,
         on_demand: bool = True,
     ):
         self.crs = crs
@@ -741,7 +735,7 @@ class Transit:
 
     @classmethod
     def from_parquet_dataset(
-        cls, path: str, crs: str, year: Optional[int] = None, week: Optional[int] = None
+        cls, path: str, crs: str, year: int | None = None, week: int | None = None
     ) -> "Transit":
         lines = Lines.from_parquet_dataset(path, year=year, week=week)
         stops = Stops.from_parquet_dataset(path, year=year, week=week)
@@ -750,7 +744,7 @@ class Transit:
 
     @classmethod
     def from_parquet_dir(
-        cls, path: str, crs: str, year: Optional[int] = None, week: Optional[int] = None
+        cls, path: str, crs: str, year: int | None = None, week: int | None = None
     ) -> "Transit":
         lines = Lines.from_parquet(path, year=year, week=week)
         stops = Stops.from_parquet(path, year=year, week=week)
@@ -765,7 +759,6 @@ class Transit:
         self.agencies.to_parquet(save_path)
         if self.transfers is not None:
             self.transfers.to_parquet(save_path)
-        return None
 
     # ----------------------------------------------------------------------
     # synchronize ids between dataframe functions
@@ -780,20 +773,16 @@ class Transit:
         ids = self.lines.data["route_gid"]
         self.agencies = self.agencies.filter_routes(ids)
 
-        return None
-
     def _sync_lines_to_agencies(self):
         """Synchronize lines to route_gid"""
 
         route_gids = self.agencies.routes().index.drop_duplicates()
         self.lines = self.lines.filter_routes(route_gids)
-        return None
 
     def _sync_stops_to_lines(self):
         """Synchronize stops to the ones in lines dataframe"""
         ids = self.lines.line_stops()["stop_gid"].drop_duplicates()
         self.stops = self.stops.filter_gids(ids.values)
-        return None
 
     # ----------------------------------------------------------------------
     # filtering functions
@@ -822,9 +811,7 @@ class Transit:
         self._sync_agencies_to_lines()
         self._sync_stops_to_lines()
 
-        return None
-
-    def filter_box(self, bounding_box: Tuple[float, float, float, float]):
+    def filter_box(self, bounding_box: tuple[float, float, float, float]):
         """
         Filter by bounding box
 
@@ -853,8 +840,6 @@ class Transit:
         # synchronise lines and stops
         self._sync_lines_to_agencies()
         self._sync_stops_to_lines()
-
-        return None
 
     # ----------------------------------------------------------------------
     # transfers functions
@@ -907,7 +892,7 @@ class Transit:
             elif isinstance(col, tuple):
                 columns.append(separator.join(col))
             else:
-                raise ValueError("columns must string or tuple")
+                raise TypeError("columns must string or tuple")
         df.columns = columns
         return df
 
@@ -918,7 +903,7 @@ class Transit:
             cutoff_hour is None
             or (isinstance(cutoff_hour, int) and cutoff_hour > 0 and cutoff_hour < 24)
         ):
-            raise ValueError("cutoff_hour must be None or an integer between 0 and 23")
+            raise TypeError("cutoff_hour must be None or an integer between 0 and 23")
 
         df = self.lines.line_stops()[
             [

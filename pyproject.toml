@@ -1,13 +1,12 @@
 [project]
-authors = [{name = "chourmo", email = "vincenttinet@icloud.com"}]
-dependencies = ["pandas", "geopandas >= 1.1.3,<2", "pyarrow", "scikit-learn", "listandstruct"]
 name = "urbantransit"
-requires-python = ">= 3.11"
+description = "Transform and analyse gtfs in a parquet format"
+license = "MIT"
 version = "0.1.2"
-
-[build-system]
-build-backend = "hatchling.build"
-requires = ["hatchling"]
+readme = "README.md"
+authors = [{name = "chourmo", email = "vincenttinet@icloud.com"}]
+requires-python = ">= 3.11"
+dependencies = ["pandas", "geopandas", "pyarrow", "scikit-learn", "listandstruct", "geometryhelpers"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge", "https://prefix.dev/urbandev"]
@@ -17,14 +16,13 @@ preview = ["pixi-build"]
 [tool.pixi.pypi-dependencies]
 urbantransit = { path = ".", editable = true }
 
-[tool.pixi.tasks]
-
 [tool.pixi.dependencies]
 pandas = ">=3.0.2,<4"
 geopandas = ">=1.1.3,<2"
-pyarrow = ">=23.0.1,<24"
+pyarrow = ">=24,<27"
 scikit-learn = ">=1.8.0,<2"
-listandstruct = { version = ">=0.0.2,<0.0.3", channel = "https://prefix.dev/urbandev" }
+listandstruct = ">=0.1.0"
+geometryhelpers = ">=0.4.0"
 
 [tool.pixi.package] 
 name = "urbantransit"
@@ -36,9 +34,15 @@ backend = { name = "pixi-build-python", version = "0.*" }
 [tool.pixi.package.host-dependencies] 
 hatchling = "==1.26.3"
 
+[tool.pixi.tasks]
+
 [tool.pixi.package.run-dependencies] 
 pandas = ">=3.0.2,<4"
 geopandas = ">=1.1.3,<2"
 pyarrow = ">=23.0.1,<24"
 scikit-learn = ">=1.8.0,<2"
-listandstruct = { version = ">=0.0.2,<0.0.3", channel = "https://prefix.dev/urbandev" }
+listandstruct = { version = ">=0.0.2", channel = "https://prefix.dev/urbandev" }
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]

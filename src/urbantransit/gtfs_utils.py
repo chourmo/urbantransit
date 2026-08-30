@@ -1,12 +1,11 @@
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
 import pandas as pd
 
-from .utils.logging import transitlog
 from .gtfs_parser import GTFSParser
 from .gtfs_to_parquet import GTFStoParquet
-from .constants import LAST_STOP
-
+from .utils.logging import transitlog
 
 # This file contains utilities to process GTFS files, including cleaning and parsing them concurrently.
 # ---------------------------------------------------

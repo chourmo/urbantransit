@@ -2,14 +2,12 @@
 
 import math
 
-import pandas as pd
-import shapely as sh
 import geopandas as gpd
+import listandstruct as ls
+import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-
-import listandstruct as ls
-
+import shapely as sh
 
 EARTH_RADIUS = 6378137.0  # in meters
 EARTH_FLATTENING = 1 / 298.257223563  # WGS-84 flattening factor
@@ -56,9 +54,9 @@ def Linestrings(x, y, by=None, crs=None):
 
 def connect_points(pt1, pt2):
     if not isinstance(pt1, gpd.GeoSeries):
-        raise ValueError("pt1 must be a Geoseries")
+        raise TypeError("pt1 must be a Geoseries")
     if not isinstance(pt2, gpd.GeoSeries):
-        raise ValueError("pt2 must be a Geoseries")
+        raise TypeError("pt2 must be a Geoseries")
 
     point1 = pt1.get_coordinates()
     point2 = pt2.get_coordinates()
@@ -181,15 +179,15 @@ def pairs(
     Returns : a GeoDataframe with from and to stops, from and to point geometries and distance columns"""
 
     if not isinstance(left, gpd.GeoDataFrame):
-        raise ValueError("origin must be a GeoDataframe")
+        raise TypeError("origin must be a GeoDataframe")
 
     if left.crs.is_geographic:
-        raise ValueError(
+        raise TypeError(
             f"left crs {left.crs} can not be geographic for distance calculation"
         )
 
     if right is not None and right.crs.is_geographic:
-        raise ValueError(
+        raise TypeError(
             f"destination crs {left.crs} can not be geographic for distance calculation"
         )
 

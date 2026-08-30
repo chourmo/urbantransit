@@ -1,5 +1,3 @@
-from typing import Optional
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -73,8 +71,8 @@ def hash_ids(
 def intersect_ids(
     df1: pd.Series,
     df2: pd.Series,
-    left_id: Optional[str] = None,
-    right_id: Optional[str] = None,
+    left_id: str | None = None,
+    right_id: str | None = None,
     drop_left: bool = True,
     drop_right: bool = True,
 ) -> tuple[pd.Series, pd.Series]:

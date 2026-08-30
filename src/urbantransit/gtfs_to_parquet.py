@@ -1,26 +1,25 @@
 # GTFS to Parser maping class
 from pathlib import Path
-from typing import Optional, Tuple
 
+import geopandas as gpd
+import listandstruct as ls
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
-import listandstruct as ls
-import geopandas as gpd
-
-from urbantransit.utils.ids import hash_ids, random_ids, renumber_ids, intersect_ids
-from urbantransit.utils.spatial import group_boundingbox
-from urbantransit.utils.spatial import (
+from geometryhelpers import (
     Linestrings,
     Points,
-    last_point,
-    first_point,
     connect_points,
+    first_point,
+    group_boundingbox,
+    last_point,
 )
-from .gtfs_parser import GTFSParser
-from .constants import LAST_STOP
 
+from urbantransit.utils.ids import hash_ids, intersect_ids, random_ids, renumber_ids
 from urbantransit.utils.logging import transitlog
+
+from .constants import LAST_STOP
+from .gtfs_parser import GTFSParser
 
 
 class GTFStoParquet:
@@ -73,8 +72,6 @@ class GTFStoParquet:
 
         self.stops = self.stops.loc[self.stops.index.isin(stop_gids)]
 
-        return None
-
     # -----------------------------
     # save to parquet
 
@@ -95,7 +92,7 @@ class GTFStoParquet:
 
         return new_path
 
-    def init_parquet_paths(self, path: Path) -> Tuple[Path, Path, Path]:
+    def init_parquet_paths(self, path: Path) -> tuple[Path, Path, Path]:
         """init subpath in path, return paths for Agency, Stops and Lines"""
 
         line_path = path / "Lines"
@@ -165,17 +162,13 @@ class GTFStoParquet:
 
         agencies.to_parquet(self.new_file_path(path), index=True)
 
-        return None
-
     def stops_to_parquet(self, path: Path) -> None:
         """ " Save stops to parquet file at Path."""
         self.stops.to_parquet(self.new_file_path(path), index=True)
-        return None
 
     def lines_to_parquet(self, path: Path) -> None:
         """ " Save lines to parquet file at Path."""
         self.lines.to_parquet(self.new_file_path(path), index=False)
-        return None
 
     def to_parquet(self, path: Path):
         """Save to parquet"""
@@ -186,8 +179,6 @@ class GTFStoParquet:
         self.stops_to_parquet(stop_path)
         self.lines_to_parquet(line_path)
 
-        return None
-
     # -----------------------------
     # merge other GTFStoParquet object
 
@@ -195,8 +186,8 @@ class GTFStoParquet:
     def _merge_file(
         df: pd.DataFrame | pd.Series,
         other: pd.DataFrame | pd.Series,
-        column: Optional[str] = None,
-    ) -> Tuple[pd.DataFrame | pd.Series, pd.Series]:
+        column: str | None = None,
+    ) -> tuple[pd.DataFrame | pd.Series, pd.Series]:
         """Append other to df, renumber indices of other to avoid collisions, return new dataframe or series and the mapping from old to new indices for other"""
 
         new_other = other.copy()
@@ -283,8 +274,6 @@ class GTFStoParquet:
             )
 
         self.lines, _ = self._merge_file(self.lines, other_lines, column="line_gid")
-
-        return None
 
     # -----------------------------
     # FeedInfo.txt parser
@@ -571,7 +560,7 @@ class GTFStoParquet:
         return pd.Series(result, df.index, dtype="uint32[pyarrow]")
 
     @staticmethod
-    def get_line_id(sequence: pd.DataFrame, name: Optional[str] = None) -> pd.Series:
+    def get_line_id(sequence: pd.DataFrame, name: str | None = None) -> pd.Series:
         """Map each seq_id to a line_gid.
         A line_gid groups trips with the same stop pattern and non-overlapping times.
         """

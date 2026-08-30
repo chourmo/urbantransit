@@ -1,12 +1,13 @@
 import itertools
 from typing import TYPE_CHECKING
-import pandas as pd
+
 import geopandas as gpd
+import pandas as pd
 import shapely
 
-from urbantransit.utils.time import DayTime
-from urbantransit.utils.logging import transitlog
 from urbantransit.constants import LAST_STOP
+from urbantransit.utils.logging import transitlog
+from urbantransit.utils.time import DayTime
 
 if TYPE_CHECKING:
     from urbantransit.transit import Lines, Transfers
@@ -23,7 +24,6 @@ class TransitGraph:
         self.nodes = None
         self.edges = None
         self.search_results = {}
-        return None
 
     def make_line_cache(self, lines: "Lines") -> dict:
         """return the maximum stop_sequence in lines under 65535"""
@@ -157,9 +157,7 @@ class TransitGraph:
         prev_tpoint, prev_round = value
         if prev_round < transfer_round:
             return True
-        if (prev_round == transfer_round) and (prev_tpoint <= timepoint):
-            return True
-        return False
+        return (prev_round == transfer_round) and (prev_tpoint <= timepoint)
 
     def parse_line(self, line, transfer_round, end_time):
         """Visit lines and create a list of transfers to visit next"""
@@ -204,8 +202,6 @@ class TransitGraph:
             transfers = [self.parse_line(line, t, end_time) for line in sources]
             sources = list(itertools.chain(*transfers))
             transitlog.info(f"transfer round {t} : {len(sources)} transfers")
-
-        return None
 
     def shortest_distance(
         self,
