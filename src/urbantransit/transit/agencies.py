@@ -117,11 +117,10 @@ class Agencies:
     def routes(self, agency_data: bool = False) -> pd.DataFrame:
         """Extract routes from agencies, optionnaly add agency data to each route"""
         routes = self.data["routes"].explode().struct.explode()
-        routes = routes.drop(columns=["agency_name"])
         if not agency_data:
             return routes.reset_index().set_index("route_gid")
         agency = self.data.drop(columns=["routes", "bbox"])
-        df = pd.merge(routes, agency, on="agency_gid", how="left")
+        df = pd.merge(routes, agency, on="agency_gid", how="left").reset_index()
         return df.set_index("route_gid")
 
     def filter_gids(self, gids) -> "Agencies":
