@@ -222,7 +222,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.7.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/xyzservices-2026.3.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.0-pyh4616a5c_0.conda
+      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.3-pyh4616a5c_0.conda
       - conda: https://prefix.dev/urbandev/noarch/listandstruct-0.4.11-pyh4616a5c_0.conda
       - pypi: ./
       osx-arm64:
@@ -412,7 +412,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zlib-ng-2.3.3-h31dac16_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
-      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.0-pyh4616a5c_0.conda
+      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.3-pyh4616a5c_0.conda
       - conda: https://prefix.dev/urbandev/noarch/listandstruct-0.4.11-pyh4616a5c_0.conda
       - pypi: ./
       win-64:
@@ -602,7 +602,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/zlib-1.3.2-hfd05255_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_7.conda
-      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.0-pyh4616a5c_0.conda
+      - conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.3-pyh4616a5c_0.conda
       - conda: https://prefix.dev/urbandev/noarch/listandstruct-0.4.11-pyh4616a5c_0.conda
       - pypi: ./
 packages:
@@ -3006,7 +3006,7 @@ packages:
   - proj >=9.8.1,<9.9.0a0
   license: MIT
   purls:
-  - pkg:pypi/pyproj?source=compressed-mapping
+  - pkg:pypi/pyproj?source=hash-mapping
   run_exports: {}
   size: 589978
   timestamp: 1787944733348
@@ -4604,7 +4604,7 @@ packages:
   - python_abi 3.13.* *_cp313
   license: BSD-3-Clause
   purls:
-  - pkg:pypi/kiwisolver?source=compressed-mapping
+  - pkg:pypi/kiwisolver?source=hash-mapping
   run_exports: {}
   size: 66279
   timestamp: 1787938514092
@@ -9119,20 +9119,22 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 387535
   timestamp: 1786599623274
-- conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.0-pyh4616a5c_0.conda
-  sha256: 5d813d42997be868fb1ac0779e992b24d33f270b50a3a3f400c846fb48325c1b
-  md5: 4ca04fb706b4fa7c247e5763fb304ed0
+- conda: https://prefix.dev/urbandev/noarch/geometryhelpers-0.4.3-pyh4616a5c_0.conda
+  sha256: 21a353ffc989664b6df439f63fc67d10f57431f155f68f9a0708f2d4a477fb43
+  md5: 5738c63b4ca26bcc223f9626ce4dfd4b
   depends:
   - pandas >=3.0.2,<4
   - geopandas >=1.1.3,<2
   - numpy
   - pyarrow
+  - pyproj
+  - listandstruct
   - python >=3.11
   - python *
   license: MIT
   run_exports: {}
-  size: 12305
-  timestamp: 1788099823670
+  size: 12727
+  timestamp: 1788701103953
 - conda: https://prefix.dev/urbandev/noarch/listandstruct-0.4.11-pyh4616a5c_0.conda
   sha256: a7570366c885cfb15722b9fcea5b8a5600f550291e3548c2fc825dab86e0c342
   md5: dc07b4c74ac9366fb40aa076186a2f1a

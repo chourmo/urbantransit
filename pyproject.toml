@@ -17,12 +17,12 @@ preview = ["pixi-build"]
 urbantransit = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
-pandas = ">=3.0.0,<4"
-geopandas = ">=1.1.0,<2"
-pyarrow = ">=24,<27"
-scikit-learn = ">=1.8.0,<2"
-listandstruct = ">=0.1.0"
-geometryhelpers = ">=0.4.0"
+pandas = ">=3.0.5,<4"
+geopandas = ">=1.1.4,<2"
+pyarrow = ">=25.0.0,<26"
+scikit-learn = ">=1.9.0,<2"
+listandstruct = ">=0.4.11,<0.5"
+geometryhelpers = ">=0.4.3,<0.5"
 
 [tool.pixi.package] 
 name = "urbantransit"
