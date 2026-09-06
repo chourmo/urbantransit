@@ -19,7 +19,7 @@ from urbantransit.utils.ids import hash_ids, intersect_ids, random_ids, renumber
 from urbantransit.utils.logging import transitlog
 
 from .constants import LAST_STOP
-from .gtfs_parser import GTFSParser
+from .parsers import GTFSParser
 
 
 class GTFStoParquet:
