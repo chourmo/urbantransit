@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .parsers import GTFSParser
 from .gtfs_to_parquet import GTFStoParquet
+from .parsers import GTFSParser
 from .utils.logging import transitlog
 
 # This file contains utilities to process GTFS files, including cleaning and parsing them concurrently.
