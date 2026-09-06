@@ -118,7 +118,7 @@ class Agencies:
         if not agency_data:
             return routes.reset_index().set_index("route_gid")
         agency = self.data.drop(columns=["routes", "bbox"])
-        df = routes.join(agency, how="left").reset_index()
+        df = pd.merge(routes, agency, on="agency_gid", how="left")
         return df.set_index("route_gid")
 
     def filter_gids(self, gids) -> "Agencies":
