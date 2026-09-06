@@ -119,6 +119,7 @@ class Agencies:
         routes = self.data["routes"].explode().struct.explode()
         if not agency_data:
             return routes.reset_index().set_index("route_gid")
+        routes = routes.drop(columns=["agency_name"], errors="ignore")
         agency = self.data.drop(columns=["routes", "bbox"])
         df = pd.merge(routes, agency, on="agency_gid", how="left").reset_index()
         return df.set_index("route_gid")
