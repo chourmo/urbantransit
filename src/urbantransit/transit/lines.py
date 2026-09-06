@@ -10,6 +10,7 @@ from ..utils.ids import filter_ids
 from ..utils.logging import transitlog
 from ..utils.time import DayTime
 
+
 class Lines:
     """Class representing transit lines based on Arrow GTFS specification"""
 

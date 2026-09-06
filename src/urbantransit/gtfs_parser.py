@@ -8,19 +8,192 @@ import pyarrow as pa
 from geometryhelpers import geographic_distance
 from pyarrow import csv
 
+from .constants import WEEKDAYS
 from .utils.logging import transitlog
+
+GTFS_REQUIRED_FILES = [
+    "agency.txt",
+    "stops.txt",
+    "routes.txt",
+    "trips.txt",
+    "stop_times.txt",
+]
+
+AGENCY_DEFAULTS: dict[str, Any] = {"agency_id": 1}  # Default agency_id is missing
+AGENCY_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+AGENCY_SPEC = dict[str, Any] = {
+    "agency_id": pa.string(),
+    "agency_name": pa.string(),
+    "agency_url": pa.string(),
+    "agency_timezone": pa.string(),
+    "agency_lang": pa.string(),
+    "agency_phone": pa.string(),
+    "agency_fare_url": pa.string(),
+    "agency_email": pa.string(),
+}
+
+ROUTES_DEFAULTS: dict[str, Any] = {
+    "agency_id": 1,  # Default agency_id is missing
+    "continuous_pickup": 0,
+    "continuous_drop_off": 0,
+    "route_sort_order": 0,
+}
+ROUTES_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+ROUTES_SPEC: dict[str, Any] = {
+    "route_id": pa.string(),
+    "agency_id": pa.string(),
+    "route_short_name": pa.string(),
+    "route_long_name": pa.string(),
+    "route_desc": pa.string(),
+    "route_type": pa.uint8(),
+    "route_url": pa.string(),
+    "route_color": pa.string(),
+    "route_text_color": pa.string(),
+    "route_sort_order": pa.uint8(),
+    "continuous_pickup": pa.uint8(),
+    "continuous_drop_off": pa.uint8(),
+}
+
+STOPS_SPEC: dict[str, Any] = {
+    "stop_id": pa.string(),
+    "stop_code": pa.string(),
+    "stop_name": pa.string(),
+    "stop_desc": pa.string(),
+    "stop_lat": pa.float64(),
+    "stop_lon": pa.float64(),
+    "zone_id": pa.string(),
+    "stop_url": pa.string(),
+    "location_type": pa.uint8(),
+    "parent_station": pa.string(),
+    "stop_timezone": pa.string(),
+    "wheelchair_boarding": pa.uint8(),
+    "level_id": pa.string(),
+    "platform_code": pa.string(),
+}
+STOPS_DEFAULTS: dict[str, Any] = {
+    "location_type": 0,
+    "wheelchair_boarding": 0,
+}
+STOPS_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = {
+    "wheelchair_boarding": (1, 2, 0)
+}
+
+TRIPS_SPEC: dict[str, Any] = {
+    "route_id": pa.string(),
+    "service_id": pa.string(),
+    "trip_id": pa.string(),
+    "trip_headsign": pa.string(),
+    "trip_short_name": pa.string(),
+    "direction_id": pa.uint8(),
+    "block_id": pa.string(),
+    "shape_id": pa.string(),
+    "wheelchair_accessible": pa.uint8(),
+    "bikes_allowed": pa.uint8(),
+    "cars_allowed": pa.uint8(),
+}
+TRIPS_DEFAULTS: dict[str, Any] = {
+    "trip_headsign": None,
+    "trip_short_name": None,
+    "direction_id": None,
+    "block_id": None,
+    "shape_id": None,
+    "wheelchair_accessible": 0,
+    "bikes_allowed": 0,
+}
+TRIPS_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = {
+    "bikes_allowed": (1, 2, 0),
+    "wheelchair_accessible": (1, 2, 0),
+    "cars_allowed": (1, 2, 0),
+}
+
+STOPTIMES_SPEC: dict[str, Any] = {
+    "trip_id": pa.string(),
+    "arrival_time": pa.string(),
+    "departure_time": pa.string(),
+    "stop_id": pa.string(),
+    "stop_sequence": pa.uint16(),
+    "stop_headsign": pa.string(),
+    "pickup_type": pa.uint8(),
+    "drop_off_type": pa.uint8(),
+    "continuous_pickup": pa.uint8(),
+    "continuous_drop_off": pa.uint8(),
+    "shape_dist_traveled": pa.float32(),
+    "timepoint": pa.bool_(),
+}
+STOPTIMES_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+STOPTIMES_DEFAULTS: dict[str, Any] | None = None
+
+CALENDAR_SPEC: dict[str, Any] = {
+    "service_id": pa.string(),
+    "monday": pa.bool_(),
+    "tuesday": pa.bool_(),
+    "wednesday": pa.bool_(),
+    "thursday": pa.bool_(),
+    "friday": pa.bool_(),
+    "saturday": pa.bool_(),
+    "sunday": pa.bool_(),
+    "start_date": pa.timestamp("s"),  # pa.date32(),
+    "end_date": pa.timestamp("s"),  # pa.date32(),
+}
+CALENDAR_DEFAULTS: dict[str, Any] | None = None
+CALENDAR_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+
+CALENDAR_DATES_SPEC: dict[str, Any] = {
+    "service_id": pa.string(),
+    "date": pa.timestamp("s"),  # pa.date32(),
+    "exception_type": pa.uint8(),
+}
+CALENDAR_DATES_DEFAULTS: dict[str, Any] | None = None
+CALENDAR_DATES_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+
+SHAPES_SPEC: dict[str, Any] = {
+    "shape_id": pa.string(),
+    "shape_pt_lat": pa.float64(),
+    "shape_pt_lon": pa.float64(),
+    "shape_pt_sequence": pa.uint32(),
+    "shape_dist_traveled": pa.float32(),
+}
+SHAPES_DEFAULTS: dict[str, Any] | None = None
+SHAPES_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+
+FEEDINFO_SPEC: dict[str, Any] = {
+    "feed_publisher_name": pa.string(),
+    "feed_publisher_url": pa.string(),
+    "feed_lang": pa.string(),
+    "feed_start_date": pa.timestamp("s"),
+    "feed_end_date": pa.timestamp("s"),
+    "feed_version": pa.string(),
+    "default_lang": pa.string(),
+    "feed_contact_email": pa.string(),
+    "feed_contact_url": pa.string(),
+}
+FEEDINFO_DEFAULTS: dict[str, Any] | None = None
+FEEDINFO_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+
+TRANSFERS_SPEC: dict[str, Any] = {
+    "from_stop_id": pa.string(),
+    "to_stop_id": pa.string(),
+    "from_route_id": pa.string(),
+    "to_route_id": pa.string(),
+    "from_trip_id": pa.string(),
+    "to_trip_id": pa.string(),
+    "transfer_type": pa.uint8(),
+    "min_transfer_time": pa.uint16(),
+}
+TRANSFERS_DEFAULTS: dict[str, Any] | None = None
+TRANSFERS_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
+
+LEVELS_SPEC: dict[str, Any] = {
+    "level_id": pa.string(),
+    "level_index": pa.int16(),
+    "level_name": pa.string(),
+}
+LEVELS_DEFAULTS: dict[str, Any] | None = None
+LEVELS_BOOLEAN_COLS: dict[str, tuple[Any, Any]] | None = None
 
 
 class GTFSParser:
     """GTFS zip or folder parser and validation class"""
-
-    required_files = [
-        "agency.txt",
-        "stops.txt",
-        "routes.txt",
-        "trips.txt",
-        "stop_times.txt",
-    ]
 
     def __init__(self, path: Path, fix_inner_folder=False):
         """init from a path to a zip file or a folder"""
@@ -59,7 +232,7 @@ class GTFSParser:
         """Verify if all required files exist"""
 
         # test if all required files are in file
-        if not self.files.issuperset(set(self.required_files)):
+        if not self.files.issuperset(set(GTFS_REQUIRED_FILES)):
             return False
 
         # test if either calendar.txt or calendar_dates.txt exist
@@ -419,26 +592,13 @@ class GTFSAgencyParser(GTFSFileParser):
     unique_id: str | None = "agency_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "agency_id": pa.string(),
-        "agency_name": pa.string(),
-        "agency_url": pa.string(),
-        "agency_timezone": pa.string(),
-        "agency_lang": pa.string(),
-        "agency_phone": pa.string(),
-        "agency_fare_url": pa.string(),
-        "agency_email": pa.string(),
-    }
-    defaults: dict[str, Any] = {"agency_id": 1}  # Default agency_id is missings
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=AGENCY_SPEC,
+            defaults=AGENCY_DEFAULTS,
+            boolean_cols=AGENCY_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -454,35 +614,13 @@ class GTFSRoutesParser(GTFSFileParser):
     unique_id: str | None = "route_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "route_id": pa.string(),
-        "agency_id": pa.string(),
-        "route_short_name": pa.string(),
-        "route_long_name": pa.string(),
-        "route_desc": pa.string(),
-        "route_type": pa.uint8(),
-        "route_url": pa.string(),
-        "route_color": pa.string(),
-        "route_text_color": pa.string(),
-        "route_sort_order": pa.uint8(),
-        "continuous_pickup": pa.uint8(),
-        "continuous_drop_off": pa.uint8(),
-    }
-    defaults: dict[str, Any] = {
-        "agency_id": 1,  # Default agency_id is missing
-        "continuous_pickup": 0,
-        "continuous_drop_off": 0,
-        "route_sort_order": 0,
-    }
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=ROUTES_SPEC,
+            defaults=ROUTES_DEFAULTS,
+            boolean_cols=ROUTES_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -498,35 +636,13 @@ class GTFSStopsParser(GTFSFileParser):
     unique_id: str | None = "stop_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "stop_id": pa.string(),
-        "stop_code": pa.string(),
-        "stop_name": pa.string(),
-        "stop_desc": pa.string(),
-        "stop_lat": pa.float64(),
-        "stop_lon": pa.float64(),
-        "zone_id": pa.string(),
-        "stop_url": pa.string(),
-        "location_type": pa.uint8(),
-        "parent_station": pa.string(),
-        "stop_timezone": pa.string(),
-        "wheelchair_boarding": pa.uint8(),
-        "level_id": pa.string(),
-        "platform_code": pa.string(),
-    }
-    defaults: dict[str, Any] = {
-        "location_type": 0,
-        "wheelchair_boarding": 0,
-    }
-    boolean_cols: dict[str, tuple[Any, Any]] | None = {"wheelchair_boarding": (1, 2, 0)}
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=STOPS_SPEC,
+            defaults=STOPS_DEFAULTS,
+            boolean_cols=STOPS_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -554,41 +670,13 @@ class GTFSTripsParser(GTFSFileParser):
     unique_id: str | None = "trip_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "route_id": pa.string(),
-        "service_id": pa.string(),
-        "trip_id": pa.string(),
-        "trip_headsign": pa.string(),
-        "trip_short_name": pa.string(),
-        "direction_id": pa.uint8(),
-        "block_id": pa.string(),
-        "shape_id": pa.string(),
-        "wheelchair_accessible": pa.uint8(),
-        "bikes_allowed": pa.uint8(),
-        "cars_allowed": pa.uint8(),
-    }
-    defaults: dict[str, Any] = {
-        "trip_headsign": None,
-        "trip_short_name": None,
-        "direction_id": None,
-        "block_id": None,
-        "shape_id": None,
-        "wheelchair_accessible": 0,
-        "bikes_allowed": 0,
-    }
-    boolean_cols: dict[str, tuple[Any, Any]] | None = {
-        "bikes_allowed": (1, 2, 0),
-        "wheelchair_accessible": (1, 2, 0),
-        "cars_allowed": (1, 2, 0),
-    }
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=TRIPS_SPEC,
+            defaults=TRIPS_DEFAULTS,
+            boolean_cols=TRIPS_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -603,30 +691,13 @@ class GTFSStopTimesParser(GTFSFileParser):
     unique_id: str | None = None
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "trip_id": pa.string(),
-        "arrival_time": pa.string(),
-        "departure_time": pa.string(),
-        "stop_id": pa.string(),
-        "stop_sequence": pa.uint16(),
-        "stop_headsign": pa.string(),
-        "pickup_type": pa.uint8(),
-        "drop_off_type": pa.uint8(),
-        "continuous_pickup": pa.uint8(),
-        "continuous_drop_off": pa.uint8(),
-        "shape_dist_traveled": pa.float32(),
-        "timepoint": pa.bool_(),
-    }
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-    defaults: dict[str, Any] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=STOPTIMES_SPEC,
+            defaults=STOPTIMES_DEFAULTS,
+            boolean_cols=STOPTIMES_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -746,38 +817,13 @@ class GTFSCalendarParser(GTFSFileParser):
     unique_id: str | None = "service_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "service_id": pa.string(),
-        "monday": pa.bool_(),
-        "tuesday": pa.bool_(),
-        "wednesday": pa.bool_(),
-        "thursday": pa.bool_(),
-        "friday": pa.bool_(),
-        "saturday": pa.bool_(),
-        "sunday": pa.bool_(),
-        "start_date": pa.timestamp("s"),  # pa.date32(),
-        "end_date": pa.timestamp("s"),  # pa.date32(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
-    WEEKDAYS = [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    ]
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=CALENDAR_SPEC,
+            defaults=CALENDAR_DEFAULTS,
+            boolean_cols=CALENDAR_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -816,11 +862,11 @@ class GTFSCalendarParser(GTFSFileParser):
         calendar = calendar.drop(columns=["_shift", "start_date", "end_date", "days"])
 
         calendar["_dayofweek"] = calendar["date"].dt.dayofweek
-        day_map = {num: day for num, day in zip(range(7), self.WEEKDAYS)}
+        day_map = {num: day for num, day in zip(range(7), WEEKDAYS)}
         calendar["_dayofweek"] = calendar["_dayofweek"].map(day_map)
 
         mask = pd.Series(False, index=calendar.index)
-        for day in self.WEEKDAYS:
+        for day in WEEKDAYS:
             mask = mask | ((calendar["_dayofweek"] == day) & (calendar[day]))
         calendar = calendar.loc[mask, ["service_id", "date"]]
 
@@ -868,21 +914,13 @@ class GTFSCalendarDatesParser(GTFSFileParser):
     unique_id: str | None = "service_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "service_id": pa.string(),
-        "date": pa.timestamp("s"),  # pa.date32(),
-        "exception_type": pa.uint8(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=CALENDAR_DATES_SPEC,
+            defaults=CALENDAR_DATES_DEFAULTS,
+            boolean_cols=CALENDAR_DATES_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -897,23 +935,13 @@ class GTFSShapesParser(GTFSFileParser):
     unique_id: str | None = "shape_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "shape_id": pa.string(),
-        "shape_pt_lat": pa.float64(),
-        "shape_pt_lon": pa.float64(),
-        "shape_pt_sequence": pa.uint32(),
-        "shape_dist_traveled": pa.float32(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=SHAPES_SPEC,
+            defaults=SHAPES_DEFAULTS,
+            boolean_cols=SHAPES_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -985,27 +1013,13 @@ class GTFSFeedInfoParser(GTFSFileParser):
     unique_id: str | None = None
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "feed_publisher_name": pa.string(),
-        "feed_publisher_url": pa.string(),
-        "feed_lang": pa.string(),
-        "feed_start_date": pa.timestamp("s"),
-        "feed_end_date": pa.timestamp("s"),
-        "feed_version": pa.string(),
-        "default_lang": pa.string(),
-        "feed_contact_email": pa.string(),
-        "feed_contact_url": pa.string(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=FEEDINFO_SPEC,
+            defaults=FEEDINFO_DEFAULTS,
+            boolean_cols=FEEDINFO_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -1020,26 +1034,13 @@ class GTFSTransfersParser(GTFSFileParser):
     unique_id: str | None = None
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "from_stop_id": pa.string(),
-        "to_stop_id": pa.string(),
-        "from_route_id": pa.string(),
-        "to_route_id": pa.string(),
-        "from_trip_id": pa.string(),
-        "to_trip_id": pa.string(),
-        "transfer_type": pa.uint8(),
-        "min_transfer_time": pa.uint16(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=TRANSFERS_SPEC,
+            defaults=TRANSFERS_DEFAULTS,
+            boolean_cols=TRANSFERS_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )
@@ -1054,21 +1055,13 @@ class GTFSLevelsParser(GTFSFileParser):
     unique_id: str | None = "level_id"
     file_type = "csv"
 
-    spec: dict[str, Any] = {
-        "level_id": pa.string(),
-        "level_index": pa.int16(),
-        "level_name": pa.string(),
-    }
-    defaults: dict[str, Any] | None = None
-    boolean_cols: dict[str, tuple[Any, Any]] | None = None
-
     def __init__(self, df: pd.DataFrame, base_name: str | None = None):
         super().__init__(
             df,
             filename=self.filename,
-            spec=self.spec,
-            defaults=self.defaults,
-            boolean_cols=self.boolean_cols,
+            spec=LEVELS_SPEC,
+            defaults=LEVELS_DEFAULTS,
+            boolean_cols=LEVELS_BOOLEAN_COLS,
             is_required=self.is_required,
             file_type=self.file_type,
         )

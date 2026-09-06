@@ -6,6 +6,7 @@ import pyarrow.dataset as ds
 
 from ..utils.ids import filter_ids
 
+
 class Stops:
     """Class representing transit stops based on Arrow GTFS specification"""
 

@@ -10,6 +10,7 @@ from geometryhelpers import group_boundingbox
 
 from ..utils.ids import filter_ids
 
+
 class Agencies:
     """Class representing transit agencies based on Arrow GTFS specification"""
 
