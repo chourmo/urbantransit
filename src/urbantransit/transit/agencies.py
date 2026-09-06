@@ -28,9 +28,7 @@ class Agencies:
         self.week = week
 
     @classmethod
-    def from_parquet_dataset(
-        cls, path: str | Path, year: int, week: int
-    ) -> "Agencies":
+    def from_parquet_dataset(cls, path: str | Path, year: int, week: int) -> "Agencies":
         """Create Agencies from a dataset for year and week"""
 
         file_path = Path(path) / cls.DATASET
@@ -119,6 +117,7 @@ class Agencies:
     def routes(self, agency_data: bool = False) -> pd.DataFrame:
         """Extract routes from agencies, optionnaly add agency data to each route"""
         routes = self.data["routes"].explode().struct.explode()
+        routes = routes.drop(columns=["agency_name"])
         if not agency_data:
             return routes.reset_index().set_index("route_gid")
         agency = self.data.drop(columns=["routes", "bbox"])
