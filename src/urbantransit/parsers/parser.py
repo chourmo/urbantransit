@@ -11,6 +11,7 @@ from .calendar import GTFSCalendarParser
 from .calendar_dates import GTFSCalendarDatesParser
 from .feed_info import GTFSFeedInfoParser
 from .levels import GTFSLevelsParser
+from .parser_schema import REQUIRED_FILES
 from .routes import GTFSRoutesParser
 from .shapes import GTFSShapesParser
 from .stop_times import GTFSStopTimesParser
@@ -47,13 +48,7 @@ class GTFSParser:
     stop_times.txt, and either calendar.txt or calendar_dates.txt.
     """
 
-    required_files = [
-        'agency.txt',
-        'stops.txt',
-        'routes.txt',
-        'trips.txt',
-        'stop_times.txt',
-    ]
+    required_files = REQUIRED_FILES
 
     def __init__(self, path: Path, fix_inner_folder=False):
         """init from a path to a zip file or a folder"""
