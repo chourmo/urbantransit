@@ -3,6 +3,7 @@ from .base import GTFSFileParser
 from .calendar import GTFSCalendarParser
 from .calendar_dates import GTFSCalendarDatesParser
 from .feed_info import GTFSFeedInfoParser
+from .gtfs_to_parquet import GTFStoParquet
 from .levels import GTFSLevelsParser
 from .parser import GTFSParser
 from .routes import GTFSRoutesParser
@@ -14,6 +15,7 @@ from .trips import GTFSTripsParser
 
 __all__ = [
     'GTFSParser',
+    'GTFStoParquet',
     'GTFSFileParser',
     'GTFSAgencyParser',
     'GTFSRoutesParser',
