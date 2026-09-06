@@ -43,7 +43,7 @@ def clean_gtfs_folder(path: Path):
             if len(to_clean) > 0:
                 parser.update(to_clean)
 
-        except Exception as e:
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as e:
             transitlog.info(f"Failed to process {path}: {e}")
 
     return pd.concat(stats)
@@ -75,7 +75,7 @@ def parse_gtfs_folder(
         # quick validation + optional zip normalization
         try:
             GTFSParser(filepath, fix_inner_folder=True)
-        except Exception as e:
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as e:
             transitlog.error(f"Failed to validate {filepath.name}: {e}")
 
         return GTFStoParquet(filepath, crs=crs, week=week, year=year)
@@ -89,7 +89,7 @@ def parse_gtfs_folder(
             fp = futures[future]
             try:
                 feeds.append(future.result())
-            except Exception as e:
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError) as e:
                 errors[fp.name] = str(e)
                 transitlog.error(f"Failed to parse {fp.name}: {e}")
 
