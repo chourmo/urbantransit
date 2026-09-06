@@ -195,14 +195,14 @@ class Transfers:
     @classmethod
     def from_parquet(
         cls,
-        path: Path,
+        path: str | Path,
         crs: str,
         min_transfer: int,
         max_transfer: int,
         dists: DISTANCE_TYPE,
     ) -> "Transfers":
         """open parquet file"""
-        filepath = path / cls.FILE
+        filepath = Path(path) / cls.FILE
         try:
             table = pq.read_table(filepath)
         except (FileNotFoundError, OSError):
@@ -213,8 +213,9 @@ class Transfers:
         df = table.to_pandas(types_mapper=pd.ArrowDtype)
         return cls(df, min_transfer, max_transfer, dists, crs)
 
-    def to_parquet(self, path: Path, name: str | None = None):
+    def to_parquet(self, path: str | Path, name: str | None = None):
         """save data to parquet at path with GTFS metadata"""
+        path = Path(path)
         table = pa.Table.from_pandas(self.data, index=False)
         metadata = table.schema.metadata
         metadata.update(self._gtfs_metadata())

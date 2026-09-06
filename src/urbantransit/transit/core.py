@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -68,7 +69,7 @@ class Transit:
 
     @classmethod
     def from_parquet_dataset(
-        cls, path: str, crs: str, year: int | None = None, week: int | None = None
+        cls, path: str | Path, crs: str, year: int | None = None, week: int | None = None
     ) -> "Transit":
         lines = Lines.from_parquet_dataset(path, year=year, week=week)
         stops = Stops.from_parquet_dataset(path, year=year, week=week)
@@ -77,7 +78,7 @@ class Transit:
 
     @classmethod
     def from_parquet_dir(
-        cls, path: str, crs: str, year: int | None = None, week: int | None = None
+        cls, path: str | Path, crs: str, year: int | None = None, week: int | None = None
     ) -> "Transit":
         lines = Lines.from_parquet(path, year=year, week=week)
         stops = Stops.from_parquet(path, year=year, week=week)
@@ -85,7 +86,7 @@ class Transit:
         transfers = Transfers.from_parquet(path, crs=crs, year=year, week=week)
         return cls(crs, lines, stops, agencies, transfers)
 
-    def to_parquet(self, save_path: str):
+    def to_parquet(self, save_path: str | Path):
         """Save to Parquet"""
         self.lines.to_parquet(save_path)
         self.stops.to_parquet(save_path)

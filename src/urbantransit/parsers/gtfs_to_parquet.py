@@ -57,13 +57,13 @@ class GTFStoParquet:
         Network lines connecting stop sequences and route information.
     """
 
-    def __init__(self, path: Path, crs: str, week: int, year: int):
+    def __init__(self, path: str | Path, crs: str, week: int, year: int):
         self.week = week
         self.year = year
         self.crs = crs
 
-        self.path = path
-        self.name = path.stem
+        self.path = Path(path)
+        self.name = self.path.stem
 
         parser = GTFSParser(self.path)
         self.agencies = self.parse_agency(parser)
@@ -122,9 +122,10 @@ class GTFStoParquet:
 
         return new_path
 
-    def init_parquet_paths(self, path: Path) -> tuple[Path, Path, Path]:
+    def init_parquet_paths(self, path: str | Path) -> tuple[Path, Path, Path]:
         """init subpath in path, return paths for Agency, Stops and Lines"""
 
+        path = Path(path)
         line_path = path / "Lines"
         line_path = self._init_path(line_path, self.year, self.week)
 
@@ -200,9 +201,10 @@ class GTFStoParquet:
         """ " Save lines to parquet file at Path."""
         self.lines.to_parquet(self.new_file_path(path), index=False)
 
-    def to_parquet(self, path: Path):
+    def to_parquet(self, path: str | Path):
         """Save to parquet"""
 
+        path = Path(path)
         agency_path, stop_path, line_path = self.init_parquet_paths(path)
 
         self.agencies_to_parquet(agency_path)

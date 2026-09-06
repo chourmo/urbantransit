@@ -28,10 +28,12 @@ class Agencies:
         self.week = week
 
     @classmethod
-    def from_parquet_dataset(cls, path: Path, year: int, week: int) -> "Agencies":
+    def from_parquet_dataset(
+        cls, path: str | Path, year: int, week: int
+    ) -> "Agencies":
         """Create Agencies from a dataset for year and week"""
 
-        file_path = path / cls.DATASET
+        file_path = Path(path) / cls.DATASET
 
         try:
             dataset = ds.dataset(file_path, format="parquet", partitioning="hive")
@@ -48,10 +50,10 @@ class Agencies:
             ) from e
 
     @classmethod
-    def from_parquet(cls, path: Path, year: int, week: int) -> "Agencies":
+    def from_parquet(cls, path: str | Path, year: int, week: int) -> "Agencies":
         """Create Agencies from a path directory"""
 
-        file_path = path / cls.FILE
+        file_path = Path(path) / cls.FILE
 
         try:
             table = gpd.read_parquet(
@@ -66,8 +68,10 @@ class Agencies:
                 f"Failed to read Agencies parquet file '{file_path}': {e}"
             ) from e
 
-    def to_parquet(self, path: Path):
+    def to_parquet(self, path: str | Path):
         """Save to geoparquet file."""
+
+        path = Path(path)
 
         # save index if it has a name
         if self.data.index.name is not None:
