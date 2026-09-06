@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .gtfs_parser import GTFSParser
+from .parsers import GTFSParser
 from .gtfs_to_parquet import GTFStoParquet
 from .utils.logging import transitlog
 
