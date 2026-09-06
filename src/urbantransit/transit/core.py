@@ -14,19 +14,30 @@ if TYPE_CHECKING:
     from ..graph import TransitGraph
 
 class Transit:
-    """GTFS parquet data in a 3 main dataframes.
+    """High-level transit dataset built from parquet-backed GTFS tables.
 
-    Attributes:
-        crs : str
-            projection used to store geometries
-        lines : Lines
-            transit lines object containing lines dataframe and metadata
-        stops : Stops
-            transit stops object containing stops dataframe and metadata
-        agencies : Agencies
-            transit agencies object containing agencies dataframe and metadata
-        transfers: Transfers
-            optional transfers object containing transfers dataframe and metadata
+    A Transit object groups the core transit structures needed for spatial and
+    temporal analysis: agencies, stops, lines, and optionally transfers.
+
+    Parameters
+    ----------
+    crs : str
+        Coordinate reference system used by the geometries.
+    lines : Lines
+        Parsed line data and metadata.
+    stops : Stops
+        Stop data and metadata.
+    agencies : Agencies
+        Agency and route metadata.
+    transfers : Transfers | None, default=None
+        Optional transfer metadata derived from networks or from parquet files.
+    on_demand : bool, default=True
+        Reserved option for future on-demand corridor handling.
+
+    Notes
+    -----
+    This object is the main entry point for filtering, exporting, and building
+    graph-based network structures once a GTFS feed has been converted to parquet.
     """
 
     def __init__(
@@ -110,19 +121,22 @@ class Transit:
     # filtering functions
 
     def filter_time(self, start: DayTime, end: DayTime, inclusive="both"):
+        """Restrict the network to trips active within a time window.
+
+        Parameters
+        ----------
+        start : DayTime
+            Inclusive lower bound for the time range.
+        end : DayTime
+            Inclusive upper bound for the time range.
+        inclusive : str, default="both"
+            Time-range inclusion mode passed to the underlying line filter.
+
+        Notes
+        -----
+        Applying this filter invalidates previously computed transfer data and
+        re-syncs the agency and stop tables to the reduced line set.
         """
-        Filter the lines between start and end times
-
-        Arguments :
-            start: int
-                seconds from 00:00 on monday
-            end : int
-                seconds from 00:00 on monday
-            inclusive : str
-                include start, end, both or None
-
-            Returns:
-                None"""
 
         self.lines = self.lines.filter_time_range(
             start.to_seconds(), end.to_seconds(), inclusive
@@ -134,15 +148,19 @@ class Transit:
         self._sync_stops_to_lines()
 
     def filter_box(self, bounding_box: tuple[float, float, float, float]):
+        """Keep only routes whose bounding boxes intersect a geographic window.
+
+        Parameters
+        ----------
+        bounding_box : tuple[float, float, float, float]
+            Bounding box in the form ``(xmin, xmax, ymin, ymax)``.
+
+        Notes
+        -----
+        The route-level agency bounding boxes are used to select relevant routes,
+        after which the lines and stops are synchronized against the remaining
+        route set.
         """
-        Filter by bounding box
-
-        Arguments:
-            bouding_box : tuple of floats
-                latmin, latmax, lonmin, lonmax
-
-        Returns :
-            None"""
 
         _bbox = self.agencies.routes()["bbox"]
         xmin, xmax, ymin, ymax = bounding_box
@@ -166,20 +184,23 @@ class Transit:
     # ----------------------------------------------------------------------
     # transfers functions
     def add_transfers(self, min_transfer: int, max_transfer: int, dist: DISTANCE_TYPE):
+        """Build transfer metadata for the current network.
+
+        Parameters
+        ----------
+        min_transfer : int
+            Minimum transfer waiting time in seconds.
+        max_transfer : int
+            Maximum transfer waiting time in seconds.
+        dist : DISTANCE_TYPE
+            Transfer distance threshold, expressed either as a number or as a
+            route-type mapping.
+
+        Notes
+        -----
+        This creates or updates the transfer layer used for route connectivity
+        and graph traversal computations.
         """
-        Create transfers
-
-        Arguments :
-            min_transfer: int
-                minimum time between transfers (seconds)
-            max_transfer: int
-                maximum time between transfers (seconds)
-            dict: dict or int
-                distance or dictionary route_type:distance in crs unit,
-                use longest distance for missing route types
-
-        Returns:
-            None"""
         self.transfers = Transfers.from_lines(
             self.lines.data, min_transfer, max_transfer, dist, self.crs
         )
@@ -188,7 +209,13 @@ class Transit:
     # Graph creation
 
     def graph(self) -> "TransitGraph":
-        """Return a Graph object"""
+        """Return a graph view of the transport network.
+
+        Returns
+        -------
+        TransitGraph
+            Graph object built from the current line and transfer data.
+        """
         from ..graph import TransitGraph
 
         return TransitGraph(self.lines, self.transfers, self.crs)

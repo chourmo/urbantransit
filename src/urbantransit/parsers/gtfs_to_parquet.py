@@ -23,8 +23,38 @@ from .parser import GTFSParser
 
 
 class GTFStoParquet:
-    """Object containing gtfs data in a 3 main dataframes : agency, places (stops and stations) and lines.
-    Extra attributes are the ones used for data parsing : file path, year and week
+    """Represent a GTFS feed as parquet-ready transit tables.
+
+    The parsed feed is converted into a compact set of dataframes for the main
+    transit entities: agencies, routes, stops/stations, and lines. The object
+    also keeps metadata used during parsing such as the source path, week and
+    year.
+
+    Parameters
+    ----------
+    path : Path
+        Path to the GTFS archive or extracted directory.
+    crs : str
+        Coordinate reference system used for geometry information.
+    week : int
+        Week identifier associated with the feed.
+    year : int
+        Year associated with the feed.
+
+    Attributes
+    ----------
+    agencies : pandas.DataFrame
+        Agency metadata, including any grouped route information.
+    feedinfo : pandas.DataFrame
+        Feed metadata if present in the source GTFS.
+    routes : pandas.DataFrame
+        Route-level attributes and bounding-box metadata.
+    stops : pandas.DataFrame
+        Stop metadata used by the transit network.
+    stations : pandas.DataFrame
+        Station-level summarization derived from stop records.
+    lines : pandas.DataFrame
+        Network lines connecting stop sequences and route information.
     """
 
     def __init__(self, path: Path, crs: str, week: int, year: int):

@@ -20,7 +20,32 @@ from .trips import GTFSTripsParser
 
 
 class GTFSParser:
-    """GTFS zip or folder parser and validation class"""
+    """Load and validate a GTFS feed from a zip archive or directory.
+
+    This class checks that the supplied GTFS input contains the required files,
+    exposes file-specific parser objects for the individual GTFS datasets, and
+    provides helper methods for summary statistics and lightweight repairs.
+
+    Parameters
+    ----------
+    path : Path
+        Path to a GTFS archive (.zip) or to an extracted GTFS directory.
+    fix_inner_folder : bool, default=False
+        If True, normalize zipped feeds that contain GTFS files under an extra
+        inner folder.
+
+    Raises
+    ------
+    ValueError
+        If the input is not a GTFS directory or zip file, or if the feed is
+        missing required files.
+
+    Notes
+    -----
+    A valid GTFS feed must include at least the required files for routing and
+    validation, namely agency.txt, stops.txt, routes.txt, trips.txt,
+    stop_times.txt, and either calendar.txt or calendar_dates.txt.
+    """
 
     required_files = [
         'agency.txt',

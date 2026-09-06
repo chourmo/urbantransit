@@ -11,41 +11,62 @@ from .utils.logging import transitlog
 # top level functions
 
 
-def clean_gtfs_folder(path: Path):
-    """Clean a folder of GTFS zip files and return a dataframe of valid week and years for each file"""
+def clean_gtfs_folder(path: Path) -> pd.DataFrame:
+    """Validate and repair GTFS archives in a folder.
 
-    stats = []
+    Parameters
+    ----------
+    path : Path
+        Directory containing GTFS zip files to inspect.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A dataframe with summary statistics for each successfully processed file.
+        The dataframe is empty when no GTFS file could be processed.
+
+    Notes
+    -----
+    This function is intended for preprocessing: it validates feeds and applies
+    small structural repairs such as inverted stop codes or inverted calendar
+    date ranges when the parser can correct them safely.
+    """
+
+    stats: list[pd.DataFrame] = []
 
     for filepath in path.iterdir():
-        transitlog.info(f"Processing {path.name} file ")
+        transitlog.info(f"Processing {filepath.name}")
 
         try:
             parser = GTFSParser(filepath, fix_inner_folder=True)
             st = parser.calendar_statistics()
             st = st.to_frame("stats")
-            st["file"] = path.stem
+            st["file"] = filepath.stem
             stats.append(st)
 
             to_clean = {}
             if parser.has_inverted_stopcodes():
                 stops = parser.get_stops()
                 stops.fix_codes()
-                transitlog.info(f"File {path.name} has inverted stop codes")
+                transitlog.info(f"File {filepath.name} has inverted stop codes")
                 to_clean["stops.txt"] = stops
 
             cal = parser.get_calendar()
-            if cal.has_inverted_start_end_dates():
+            if cal is not None and cal.has_inverted_start_end_dates():
                 cal.fix_start_end_dates()
-                transitlog.info(f"File {path.name} has inverted start and end dates")
+                transitlog.info(f"File {filepath.name} has inverted start and end dates")
                 to_clean["calendar.txt"] = cal
 
             if len(to_clean) > 0:
                 parser.update(to_clean)
 
-        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as e:
-            transitlog.info(f"Failed to process {path}: {e}")
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            transitlog.warning(f"Failed to process {filepath}: {exc}")
 
-    return pd.concat(stats)
+    if not stats:
+        return pd.DataFrame(columns=["year", "week", "stats", "file"])
+
+    return pd.concat(stats, ignore_index=True)
 
 
 def parse_gtfs_folder(
@@ -56,12 +77,35 @@ def parse_gtfs_folder(
     max_workers: int | None = None,
     merge_feeds: bool = True,
 ):
-    """
-    Parse all GTFS files in a folder concurrently.
+    """Parse every GTFS archive in a folder and return transit feeds.
 
-    Returns:
-        - list[GTFStoParquet] if merge_feeds=False
-        - merged GTFStoParquet | None if merge_feeds=True
+    Parameters
+    ----------
+    path : Path
+        Directory containing GTFS zip files.
+    crs : int
+        Coordinate reference system used by the parsed feed.
+    year : int
+        Year associated with the transit dataset.
+    week : int
+        Week identifier associated with the transit dataset.
+    max_workers : int | None, optional
+        Maximum number of worker threads to use. If None, the default
+        ThreadPoolExecutor behavior is used.
+    merge_feeds : bool, default=True
+        If True, merge all successfully parsed feeds into a single object.
+        If False, return one object per archive.
+
+    Returns
+    -------
+    list[GTFStoParquet] | GTFStoParquet | None
+        A list of parsed feeds, a single merged feed, or None if no file could
+        be parsed.
+
+    Notes
+    -----
+    Each archive is validated before conversion. Failures are logged but do not
+    interrupt the processing of other feeds in the same directory.
     """
 
     files = [p for p in path.iterdir() if p.is_file() and p.suffix == ".zip"]

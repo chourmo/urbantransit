@@ -213,17 +213,36 @@ class TransitGraph:
         speed: float = 4.0,
         max_transfers: int = 4,
     ) -> gpd.GeoDataFrame:
-        """Shortest distance from one start point
-        Args:
-            point: GeoDataFrame with start points
-            start: Start time
-            max_travel: Maximum arrival time in seconds
-            start_distance: Maximum distance from start point to find source nodes
-            speed: Walking speed in distance unit (crs) per second
-            max_transfers: Maximum number of transfers allowed
+        """Compute the shortest reachable path from a start point.
 
-        Returns:
-            GeoDataFrame with shortest paths from start point, travel time and number of transfers
+        Parameters
+        ----------
+        x : float
+            X coordinate of the departure point.
+        y : float
+            Y coordinate of the departure point.
+        start : DayTime
+            Departure time.
+        max_travel : int
+            Maximum trip duration in seconds from the start time.
+        start_distance : int
+            Maximum walking distance from the origin point to reach the network.
+        speed : float, default=4.0
+            Walking speed used to translate the walking distance into time.
+        max_transfers : int, default=4
+            Maximum number of transfers allowed during the journey.
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+            Reachable destinations with geometry, arrival time, and transfer
+            information.
+
+        Notes
+        -----
+        This method builds the relevant subgraph for the requested time window,
+        scans valid source nodes near the starting location, and evaluates the
+        best itinerary under the transfer limit.
         """
 
         # Initialize the values of all nodes
