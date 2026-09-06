@@ -650,7 +650,6 @@ class GTFStoParquet:
         stops.filter_trips(trip_ids)
 
         stops.set_sequence_id("trip_id", "seq_id")
-        stops.fill_missing_times()
         stops.drop_duplicate_stops()
         stops.drop_single_sequence()
         stops.drop_invalid_shapedist()
