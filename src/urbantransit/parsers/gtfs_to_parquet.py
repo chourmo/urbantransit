@@ -174,8 +174,18 @@ class GTFStoParquet:
 
         return packed.to_frame("routes")
 
-    def agencies_to_parquet(self, path: Path) -> None:
+    @staticmethod
+    def _clear_parquet_files(path: Path) -> None:
+        """Delete existing parquet files at path."""
+
+        for f in path.glob("*.parquet"):
+            f.unlink()
+
+    def agencies_to_parquet(self, path: Path, overwrite: bool = False) -> None:
         """Save agencies, routes and feed_info to Parquet at Path."""
+
+        if overwrite:
+            self._clear_parquet_files(path)
 
         routes = self.pack_routes(self.routes)
 
@@ -193,23 +203,31 @@ class GTFStoParquet:
 
         agencies.to_parquet(self.new_file_path(path), index=True)
 
-    def stops_to_parquet(self, path: Path) -> None:
+    def stops_to_parquet(self, path: Path, overwrite: bool = False) -> None:
         """ " Save stops to parquet file at Path."""
+        if overwrite:
+            self._clear_parquet_files(path)
         self.stops.to_parquet(self.new_file_path(path), index=True)
 
-    def lines_to_parquet(self, path: Path) -> None:
+    def lines_to_parquet(self, path: Path, overwrite: bool = False) -> None:
         """ " Save lines to parquet file at Path."""
+        if overwrite:
+            self._clear_parquet_files(path)
         self.lines.to_parquet(self.new_file_path(path), index=False)
 
-    def to_parquet(self, path: str | Path):
-        """Save to parquet"""
+    def to_parquet(self, path: str | Path, overwrite: bool = False):
+        """Save to parquet.
+
+        If overwrite is True, delete existing parquet files at the
+        Agencies, Stops and Lines paths before saving.
+        """
 
         path = Path(path)
         agency_path, stop_path, line_path = self.init_parquet_paths(path)
 
-        self.agencies_to_parquet(agency_path)
-        self.stops_to_parquet(stop_path)
-        self.lines_to_parquet(line_path)
+        self.agencies_to_parquet(agency_path, overwrite=overwrite)
+        self.stops_to_parquet(stop_path, overwrite=overwrite)
+        self.lines_to_parquet(line_path, overwrite=overwrite)
 
     # -----------------------------
     # merge other GTFStoParquet object
