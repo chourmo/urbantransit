@@ -3,15 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
-WEEKDAYS = [
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-]
+from ..constants import WEEKDAYS
 
 
 def _week_year_epoch(year: int, week: int) -> int:
@@ -71,21 +63,11 @@ class DayTime:
     minutes: int
     seconds: int = 0
 
-    WEEKDAYS = [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    ]
-
     def __post_init__(self):
         """validate values"""
 
-        if self.day not in self.WEEKDAYS:
-            raise ValueError(f"Invalid day: {self.day}. Must be one of {self.WEEKDAYS}")
+        if self.day not in WEEKDAYS:
+            raise ValueError(f"Invalid day: {self.day}. Must be one of {WEEKDAYS}")
         if self.hours < 0:
             raise ValueError(f"{self.hours} hour cannot be negative")
         if self.hours > 24:
@@ -102,8 +84,8 @@ class DayTime:
     def day_index(self, day=None):
 
         if day is not None:
-            return list.index(self.WEEKDAYS, day)
-        return list.index(self.WEEKDAYS, self.day)
+            return list.index(WEEKDAYS, day)
+        return list.index(WEEKDAYS, self.day)
 
     @staticmethod
     def decompose(seconds: int) -> tuple[int, int, int, int]:
@@ -133,4 +115,4 @@ class DayTime:
 
         d, h, m, s = self.decompose(new_time)
 
-        return DayTime(self.WEEKDAYS[d], h, m, s)
+        return DayTime(WEEKDAYS[d], h, m, s)

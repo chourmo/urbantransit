@@ -32,7 +32,7 @@ class GTFStoParquet:
 
     Parameters
     ----------
-    path : Path
+    path : Path or string
         Path to the GTFS archive or extracted directory.
     crs : str
         Coordinate reference system used for geometry information.
