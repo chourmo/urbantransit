@@ -1,11 +1,11 @@
 """Command-line interface for urbantransit."""
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
-from .gtfs_parser import GTFSParser
 from .gtfs_utils import clean_gtfs_folder, parse_gtfs_folder
+from .parsers.parser import GTFSParser
 
 
 def _path(value: str) -> Path:
@@ -34,21 +34,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parse = commands.add_parser("parse", help="convert GTFS zip files to Parquet")
     parse.add_argument("input", type=_path, help="directory containing GTFS zip files")
     parse.add_argument("output", type=Path, help="destination directory")
-    parse.add_argument("--crs", default="EPSG:3857", help="projected CRS (default: EPSG:3857)")
+    parse.add_argument(
+        "--crs", default="EPSG:3857", help="projected CRS (default: EPSG:3857)"
+    )
     parse.add_argument("--year", type=int, required=True, help="data year")
     parse.add_argument("--week", type=int, required=True, help="ISO week number")
-    parse.add_argument("--workers", type=int, default=None, help="maximum parsing workers")
+    parse.add_argument(
+        "--workers", type=int, default=None, help="maximum parsing workers"
+    )
     parse.set_defaults(handler=_parse)
 
     return parser
 
 
 def _validate(args: argparse.Namespace) -> int:
-    paths = (
-        sorted(args.input.glob("*.zip"))
-        if args.input.is_dir()
-        else [args.input]
-    )
+    paths = sorted(args.input.glob("*.zip")) if args.input.is_dir() else [args.input]
     if not paths:
         raise ValueError(f"no GTFS zip files found in {args.input}")
 
