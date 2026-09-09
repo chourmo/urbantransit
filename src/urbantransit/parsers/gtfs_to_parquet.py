@@ -57,7 +57,9 @@ class GTFStoParquet:
         Network lines connecting stop sequences and route information.
     """
 
-    def __init__(self, path: str | Path, crs: str, week: int, year: int):
+    def __init__(
+        self, path: str | Path, crs: str, week: int, year: int, raw: bool = False
+    ):
         self.week = week
         self.year = year
         self.crs = crs
@@ -72,6 +74,9 @@ class GTFStoParquet:
         self.routes = self.parse_routes(parser)
         self.stops, self.stations = self.parse_stops(parser)
         self.lines = self.parse_lines(parser)
+
+        if raw:
+            return None
 
         # force existence between dataframes
         # filter routes from lines and add boundingbox
@@ -455,7 +460,6 @@ class GTFStoParquet:
 
         trips = parser.get_trips().data
         services = parser.merged_calendars()
-
         if len(services) == 0:
             raise ValueError(
                 f"{self.name} has no service for {self.week}/{self.year} week"
