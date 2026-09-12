@@ -42,6 +42,14 @@ run = "python -m urbantransit --help"
 validate = "python -m urbantransit validate"
 clean = "python -m urbantransit clean"
 parse = "python -m urbantransit parse"
+notebook = { cmd = "marimo edit notebooks/get_line_id.py", cwd = "." }
+
+[tool.pixi.feature.dev.dependencies]
+marimo = "*"
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
 
 [build-system]
 build-backend = "hatchling.build"

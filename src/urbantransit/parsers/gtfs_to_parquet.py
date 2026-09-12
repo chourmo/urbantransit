@@ -3,6 +3,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import listandstruct as ls
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -611,12 +612,285 @@ class GTFStoParquet:
 
         result = pc.add(sec, pc.add(pc.multiply(hours, 3600), pc.multiply(minutes, 60)))
 
-        return pd.Series(result, df.index, dtype="uint32[pyarrow]")
+        # signed dtype: downstream arrival/departure subtractions rely on
+        # negative differences to detect schedule conflicts, which an
+        # unsigned type would silently wrap around instead of representing
+        return pd.Series(result, df.index, dtype="int32[pyarrow]")
 
     @staticmethod
-    def get_line_id(sequence: pd.DataFrame, name: str | None = None) -> pd.Series:
+    def _split_conflicting_lines(lines: pd.DataFrame) -> pd.DataFrame:
+        """Split line_gid groups with overlapping schedules into separate ids.
+
+        ``lines`` must have one row per seq_id with ``line_gid``, ``arrival``,
+        ``departure`` and ``_first_dep`` columns. Trips sharing a ``line_gid``
+        are sorted by their first departure; whenever a trip's departure
+        occurs before the previous trip's arrival at any shared stop, the
+        conflicting trips are re-hashed to a new ``line_gid``. This repeats
+        until no line_gid group has an internal conflict left.
+
+        Shared by get_line_id and get_line_id_old (and any other line_gid
+        signature scheme), since the conflict-resolution logic is identical
+        regardless of how the initial line_gid was derived.
+        """
+
+        lines = lines.copy()
+        # a hash-based line_gid can exceed int64 range, so ids are kept as
+        # uint64[pyarrow] throughout (also lets get_line_id_old share the
+        # same re-hashing scheme instead of an unsafe max()+1 increment)
+        lines["line_gid"] = lines["line_gid"].astype("uint64[pyarrow]")
+
+        while True:
+            lines = lines.sort_values(["line_gid", "_first_dep"], ascending=True)
+
+            prev_arrival = lines.groupby("line_gid", sort=False)["arrival"].shift(1)
+            prev_arrival = prev_arrival.where(prev_arrival.notna(), lines["arrival"])
+
+            min_diff = (
+                lines["departure"]
+                .listarray.subtract(prev_arrival)
+                .listarray.aggregate("min")
+            )
+            conflict = min_diff < 0
+
+            if not conflict.any():
+                break
+
+            bad_line_gids = lines.loc[conflict, "line_gid"].drop_duplicates().to_list()
+            # re-hash conflicting line_gid with a salt to derive new unique ids,
+            # avoiding uint64 overflow from incrementing near-max hash values
+            remap_df = pd.DataFrame(
+                {"line_gid": bad_line_gids, "_salt": range(len(bad_line_gids))}
+            )
+            new_gids = pd.util.hash_pandas_object(remap_df, index=False).astype(
+                "uint64[pyarrow]"
+            )
+            remap = dict(zip(bad_line_gids, new_gids))
+            lines.loc[conflict, "line_gid"] = lines.loc[conflict, "line_gid"].map(remap)
+
+        return lines
+
+    @staticmethod
+    def _list_series_to_matrix(series: pd.Series) -> np.ndarray:
+        """Convert a pd.Series of equal-length int ListArrays into a 2D
+        numpy array of shape (n_rows, list_length)."""
+
+        pa_arr = series.array._pa_array
+        if isinstance(pa_arr, pa.ChunkedArray):
+            pa_arr = pa_arr.combine_chunks()
+        n = len(pa_arr)
+        if n == 0:
+            return np.empty((0, 0), dtype="int64")
+        values = pc.list_flatten(pa_arr).to_numpy(zero_copy_only=False)
+        return values.reshape(n, len(values) // n).astype("int64")
+
+    @staticmethod
+    def _split_conflicting_lines_min_groups(lines: pd.DataFrame) -> pd.DataFrame:
+        """Single-pass alternative that minimizes the number of line_gid groups.
+
+        This is the "minimum number of resources/vehicles" interval
+        partitioning problem, but using the *exact* per-stop compatibility
+        test (a candidate trip can extend a sub-line only if its departure
+        is at or after that sub-line's last-assigned-trip arrival at every
+        shared stop - the same elementwise check as _split_conflicting_lines),
+        not a coarser whole-trip first-departure/last-arrival reduction
+        (which is stricter than necessary and can over-split schedules with
+        varying dwell/travel times between stops).
+
+        Within each original line_gid group, trips are processed in order of
+        first departure. For each trip, every currently open sub-line is
+        checked in one vectorized numpy comparison against the trip's
+        departure array; among the compatible ones, the trip joins the
+        sub-line whose last arrival is the "tightest fit" (largest maximum
+        value), keeping sub-lines with more slack open for later trips -
+        otherwise a new sub-line is opened. Because compatibility here is
+        transitive along a chain (each trip's own arrival dominates its own
+        departure at every stop, since dwell/travel times are >= 0), it is
+        only ever necessary to compare a candidate trip against the *last*
+        trip assigned to a sub-line, not the whole history.
+
+        This produces the same or fewer sub-lines than
+        _split_conflicting_lines, without the repeated re-hashing rounds
+        that method needs to converge.
+
+        Important for shortest-path search: fewer line_gid groups means
+        fewer distinct lines/edges to traverse, without sacrificing
+        correctness (no two trips sharing a line_gid overlap at any stop).
+        """
+
+        lines = lines.copy()
+        lines["line_gid"] = lines["line_gid"].astype("uint64[pyarrow]")
+        lines = lines.sort_values(["line_gid", "_first_dep"], ascending=True)
+        lines = lines.reset_index(drop=True)
+
+        sub_line = np.empty(len(lines), dtype=np.int64)
+
+        for _, group in lines.groupby("line_gid", sort=False):
+            positions = group.index.to_numpy()
+            departures = GTFStoParquet._list_series_to_matrix(group["departure"])
+            arrivals = GTFStoParquet._list_series_to_matrix(group["arrival"])
+
+            n_rows = len(group)
+            assignment = np.empty(n_rows, dtype=np.int64)
+
+            # last-assigned-trip arrival array for each currently open
+            # sub-line, pre-allocated once (at most n_rows chains can ever
+            # be open) and updated in place - avoids rebuilding a fresh
+            # matrix (np.vstack) on every row
+            chain_arrival = np.empty((n_rows, arrivals.shape[1]), dtype=np.int64)
+            # cached max of each open chain's last arrival, so picking the
+            # "tightest fit" doesn't recompute .max(axis=1) over the full
+            # chain matrix on every row
+            chain_tightness = np.empty(n_rows, dtype=np.int64)
+            n_chains = 0
+
+            for row in range(n_rows):
+                chosen = -1
+                if n_chains:
+                    open_chains = chain_arrival[:n_chains]
+                    compatible = np.flatnonzero(
+                        np.all(departures[row] >= open_chains, axis=1)
+                    )
+                    if compatible.size == 1:
+                        chosen = int(compatible[0])
+                    elif compatible.size > 1:
+                        # tightest fit: prefer the sub-line closest to being
+                        # "full", keeping looser sub-lines open for later
+                        # trips
+                        tightness = chain_tightness[compatible]
+                        chosen = int(compatible[np.argmax(tightness)])
+
+                if chosen == -1:
+                    chosen = n_chains
+                    n_chains += 1
+
+                chain_arrival[chosen] = arrivals[row]
+                chain_tightness[chosen] = arrivals[row].max()
+                assignment[row] = chosen
+
+            sub_line[positions] = assignment
+
+
+        combo = pd.DataFrame(
+            {"line_gid": lines["line_gid"].to_numpy(), "_sub": sub_line}
+        )
+        # assign via .to_numpy(): hash_pandas_object returns a default
+        # RangeIndex, while `lines` keeps its sort_values-reordered index, so
+        # a direct Series assignment would silently misalign by label
+        lines["line_gid"] = pd.util.hash_pandas_object(combo, index=False).to_numpy()
+        lines["line_gid"] = lines["line_gid"].astype("uint64[pyarrow]")
+
+        return lines
+
+    @staticmethod
+    def _finalize_line_gid(
+        lines: pd.DataFrame,
+        sequence: pd.DataFrame,
+        name: str | None,
+        splitter=None,
+    ) -> pd.Series:
+        """Resolve overlapping schedules, log the resulting line count, and
+        return the final seq_id -> line_gid mapping.
+
+        ``lines`` must have one row per seq_id with seq_id, line_gid,
+        arrival, departure and _first_dep columns. ``splitter`` defaults to
+        the iterative _split_conflicting_lines implementation.
+        """
+
+        splitter = splitter or GTFStoParquet._split_conflicting_lines
+        lines = splitter(lines)
+
+        line_gids = lines["line_gid"].nunique()
+        route_dirs = sequence[["route_gid", "direction_id"]].drop_duplicates().shape[0]
+        transitlog.info(
+            f"{name} : {round(line_gids / route_dirs, 2)} lines per route/direction"
+        )
+
+        return lines.set_index("seq_id")["line_gid"]
+
+    @staticmethod
+    def get_line_id(
+        sequence: pd.DataFrame,
+        name: str | None = None,
+        split_by_route: bool = False,
+        conflict_strategy: str = "min_groups",
+    ) -> pd.Series:
         """Map each seq_id to a line_gid.
         A line_gid groups trips with the same stop pattern and non-overlapping times.
+
+        Parameters
+        ----------
+        sequence : pd.DataFrame
+            must contain seq_id, stop_gid, stop_sequence, departure, arrival columns,
+            plus route_gid and direction_id (route_gid is also required if
+            split_by_route is True).
+        name : str, optional
+            used for logging.
+        split_by_route : bool, default False
+            if True, trips sharing an identical stop pattern but with a different
+            route_gid are assigned different line_gid values.
+        conflict_strategy : {"min_groups", "iterative"}, default "min_groups"
+            how to resolve overlapping schedules within a shared stop pattern:
+
+            - "min_groups": single-pass greedy interval partitioning, uses the
+              minimum possible number of line_gid groups (recommended, e.g. for
+              shortest-path search where fewer lines/edges is preferable).
+            - "iterative": repeatedly re-sorts/re-hashes conflicting groups
+              until none overlap; also produces a minimal grouping but with a
+              while loop and more overhead.
+        """
+
+        cols = ["seq_id", "stop_gid", "stop_sequence", "departure", "arrival"]
+        if split_by_route:
+            cols = [*cols, "route_gid"]
+        df = sequence[cols].copy()
+
+        # Build the ordered stop-pattern ListArray and hash it: a unique value per
+        # distinct sequence of stops, taking stop order into account.
+        stop_pattern = ls.list_array(df["stop_gid"], df["seq_id"], ignore_index=True)
+        departure = ls.list_array(
+            df["departure"], offsets=stop_pattern, ignore_index=True
+        )
+        arrival = ls.list_array(df["arrival"], offsets=stop_pattern, ignore_index=True)
+
+        lines = df[["seq_id"]].drop_duplicates(ignore_index=True)
+        lines["line_gid"] = ls.hash_list_array(stop_pattern)
+
+        if split_by_route:
+            route_gid = df.drop_duplicates("seq_id", ignore_index=True)["route_gid"]
+            combo = pd.DataFrame(
+                {
+                    "line_gid": lines["line_gid"].to_numpy(),
+                    "route_gid": route_gid.to_numpy(),
+                }
+            )
+            lines["line_gid"] = pd.util.hash_pandas_object(
+                combo, index=False
+            ).astype("uint64[pyarrow]")
+
+        lines["arrival"] = arrival
+        lines["departure"] = departure
+        lines["_first_dep"] = lines["departure"].listarray.get(0)
+
+        try:
+            splitter = {
+                "min_groups": GTFStoParquet._split_conflicting_lines_min_groups,
+                "iterative": GTFStoParquet._split_conflicting_lines,
+            }[conflict_strategy]
+        except KeyError:
+            raise ValueError(
+                f"Unknown conflict_strategy {conflict_strategy!r}, expected one of "
+                "'min_groups', 'iterative'"
+            ) from None
+
+        return GTFStoParquet._finalize_line_gid(lines, sequence, name, splitter)
+
+    @staticmethod
+    def get_line_id_old(sequence: pd.DataFrame, name: str | None = None) -> pd.Series:
+        """Map each seq_id to a line_gid.
+        A line_gid groups trips with the same stop pattern and non-overlapping times.
+
+        Kept for comparison/testing against get_line_id; uses a custom aggregated
+        stop-position signature instead of hash_list_array.
         """
 
         cols = ["seq_id", "stop_gid", "stop_sequence", "departure", "arrival"]
@@ -642,37 +916,7 @@ class GTFStoParquet:
         lines["departure"] = departure
         lines["_first_dep"] = lines["departure"].listarray.get(0)
 
-        # Split conflicting schedules (overlapping times inside same line_gid)
-        while True:
-            lines = lines.sort_values(["line_gid", "_first_dep"], ascending=True)
-
-            prev_arrival = lines.groupby("line_gid", sort=False)["arrival"].shift(1)
-            prev_arrival = prev_arrival.where(prev_arrival.notna(), lines["arrival"])
-
-            min_diff = (
-                lines["departure"]
-                .listarray.subtract(prev_arrival)
-                .listarray.aggregate("min")
-            )
-            conflict = min_diff < 0
-
-            if not conflict.any():
-                break
-
-            bad_line_gids = lines.loc[conflict, "line_gid"].drop_duplicates().to_list()
-            next_gid = int(lines["line_gid"].max()) + 1
-            remap = dict(
-                zip(bad_line_gids, range(next_gid, next_gid + len(bad_line_gids)))
-            )
-            lines.loc[conflict, "line_gid"] = lines.loc[conflict, "line_gid"].map(remap)
-
-        line_gids = lines["line_gid"].nunique()
-        route_dirs = sequence[["route_gid", "direction_id"]].drop_duplicates().shape[0]
-        transitlog.info(
-            f"{name} : {round(line_gids / route_dirs, 2)} lines per route/direction"
-        )
-
-        return lines.set_index("seq_id")["line_gid"]
+        return GTFStoParquet._finalize_line_gid(lines, sequence, name)
 
     @staticmethod
     def is_invalid_dist(distance: pd.Series, sequence: pd.DataFrame) -> pd.Series:
