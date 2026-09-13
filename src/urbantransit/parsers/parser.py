@@ -94,17 +94,17 @@ class GTFSParser:
         return "calendar.txt" in self.files or "calendar_dates.txt" in self.files
 
     def calendar_statistics(self):
-        """return a dataframe of week, year and number of trips"""
+        """return a dataframe with number of unique days in week and number of trips for each week and year"""
         calendars = self.merged_calendars()
-        trips = self.get_trips().data
+        trips = self.get_trips().data[["service_id", "trip_id"]]
 
-        calendars = calendars.groupby(["week", "year", "service_id"]).size()
-        calendars = calendars.to_frame("size").reset_index()
+        stats = pd.merge(calendars, trips, on="service_id", how="left")
+        stats = stats.groupby(["year", "week"]).agg(
+            {"date": "nunique", "trip_id": "nunique"}
+        )
+        stats = stats.rename(columns={"date": "days_of_week", "trip_id": "trips"})
 
-        df = pd.merge(trips, calendars, on="service_id", how="left")
-        df = df.groupby(["year", "week"], sort="ascending")["size"].sum()
-
-        return df
+        return stats
 
     # ----------------------------------------------------------------------------------
     # get files
