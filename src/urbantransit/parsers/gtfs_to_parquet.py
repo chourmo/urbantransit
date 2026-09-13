@@ -1268,9 +1268,7 @@ class GTFStoParquet:
         # ------------------------------------------------
         # create lines / arcs
         # add line index
-        line_ids = self.line_id(df, self.name, split_by="route_gid").to_frame(
-            "line_gid"
-        )
+        line_ids = self.line_id(df, split_by="route_gid").to_frame("line_gid")
         df = pd.merge(df, line_ids, left_on="seq_id", right_index=True)
         del df["seq_id"]
 
