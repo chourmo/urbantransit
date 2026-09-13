@@ -14,18 +14,18 @@ from .transfers import GTFSTransfersParser
 from .trips import GTFSTripsParser
 
 __all__ = [
-    'GTFSParser',
-    'GTFStoParquet',
-    'GTFSFileParser',
     'GTFSAgencyParser',
-    'GTFSRoutesParser',
-    'GTFSStopsParser',
-    'GTFSTripsParser',
-    'GTFSStopTimesParser',
-    'GTFSCalendarParser',
     'GTFSCalendarDatesParser',
-    'GTFSShapesParser',
+    'GTFSCalendarParser',
     'GTFSFeedInfoParser',
-    'GTFSTransfersParser',
+    'GTFSFileParser',
     'GTFSLevelsParser',
+    'GTFSParser',
+    'GTFSRoutesParser',
+    'GTFSShapesParser',
+    'GTFSStopTimesParser',
+    'GTFSStopsParser',
+    'GTFSTransfersParser',
+    'GTFSTripsParser',
+    'GTFStoParquet',
 ]

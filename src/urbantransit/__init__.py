@@ -1,4 +1,5 @@
 __all__ = [
+    "GTFSParser",
     "GTFStoParquet",
     "Transit",
     "TransitGraph",
@@ -8,6 +9,10 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "GTFSParser":
+        from .parsers import GTFSParser
+
+        return GTFSParser
     if name == "TransitGraph":
         from .graph import TransitGraph
 
