@@ -769,7 +769,6 @@ class GTFStoParquet:
 
             sub_line[positions] = assignment
 
-
         combo = pd.DataFrame(
             {"line_gid": lines["line_gid"].to_numpy(), "_sub": sub_line}
         )
@@ -784,11 +783,9 @@ class GTFStoParquet:
     @staticmethod
     def _finalize_line_gid(
         lines: pd.DataFrame,
-        sequence: pd.DataFrame,
-        name: str | None,
         splitter=None,
     ) -> pd.Series:
-        """Resolve overlapping schedules, log the resulting line count, and
+        """Resolve overlapping schedules and
         return the final seq_id -> line_gid mapping.
 
         ``lines`` must have one row per seq_id with seq_id, line_gid,
@@ -797,21 +794,12 @@ class GTFStoParquet:
         """
 
         splitter = splitter or GTFStoParquet._split_conflicting_lines
-        lines = splitter(lines)
-
-        line_gids = lines["line_gid"].nunique()
-        route_dirs = sequence[["route_gid", "direction_id"]].drop_duplicates().shape[0]
-        transitlog.info(
-            f"{name} : {round(line_gids / route_dirs, 2)} lines per route/direction"
-        )
-
         return lines.set_index("seq_id")["line_gid"]
 
     @staticmethod
-    def get_line_id(
+    def line_id(
         sequence: pd.DataFrame,
-        name: str | None = None,
-        split_by_route: bool = False,
+        split_by: bool | str = False,
         conflict_strategy: str = "min_groups",
     ) -> pd.Series:
         """Map each seq_id to a line_gid.
@@ -821,13 +809,11 @@ class GTFStoParquet:
         ----------
         sequence : pd.DataFrame
             must contain seq_id, stop_gid, stop_sequence, departure, arrival columns,
-            plus route_gid and direction_id (route_gid is also required if
-            split_by_route is True).
-        name : str, optional
-            used for logging.
-        split_by_route : bool, default False
+            plus split_by column and direction_id .
+        split_by : bool | str, default False
             if True, trips sharing an identical stop pattern but with a different
             route_gid are assigned different line_gid values.
+            if a string, it specifies the column name to split by.
         conflict_strategy : {"min_groups", "iterative"}, default "min_groups"
             how to resolve overlapping schedules within a shared stop pattern:
 
@@ -840,8 +826,12 @@ class GTFStoParquet:
         """
 
         cols = ["seq_id", "stop_gid", "stop_sequence", "departure", "arrival"]
-        if split_by_route:
-            cols = [*cols, "route_gid"]
+        if isinstance(split_by, str):
+            if split_by not in sequence.columns:
+                raise ValueError(f"Column {split_by!r} not found in the DataFrame")
+
+            cols = [*cols, split_by]
+
         df = sequence[cols].copy()
 
         # Build the ordered stop-pattern ListArray and hash it: a unique value per
@@ -855,17 +845,17 @@ class GTFStoParquet:
         lines = df[["seq_id"]].drop_duplicates(ignore_index=True)
         lines["line_gid"] = ls.hash_list_array(stop_pattern)
 
-        if split_by_route:
-            route_gid = df.drop_duplicates("seq_id", ignore_index=True)["route_gid"]
+        if isinstance(split_by, str):
+            split_by_col = df.drop_duplicates("seq_id", ignore_index=True)[split_by]
             combo = pd.DataFrame(
                 {
                     "line_gid": lines["line_gid"].to_numpy(),
-                    "route_gid": route_gid.to_numpy(),
+                    split_by: split_by_col.to_numpy(),
                 }
             )
-            lines["line_gid"] = pd.util.hash_pandas_object(
-                combo, index=False
-            ).astype("uint64[pyarrow]")
+            lines["line_gid"] = pd.util.hash_pandas_object(combo, index=False).astype(
+                "uint64[pyarrow]"
+            )
 
         lines["arrival"] = arrival
         lines["departure"] = departure
@@ -882,10 +872,10 @@ class GTFStoParquet:
                 "'min_groups', 'iterative'"
             ) from None
 
-        return GTFStoParquet._finalize_line_gid(lines, sequence, name, splitter)
+        return GTFStoParquet._finalize_line_gid(lines, splitter)
 
     @staticmethod
-    def get_line_id_old(sequence: pd.DataFrame, name: str | None = None) -> pd.Series:
+    def get_line_id_old(sequence: pd.DataFrame) -> pd.Series:
         """Map each seq_id to a line_gid.
         A line_gid groups trips with the same stop pattern and non-overlapping times.
 
@@ -916,7 +906,7 @@ class GTFStoParquet:
         lines["departure"] = departure
         lines["_first_dep"] = lines["departure"].listarray.get(0)
 
-        return GTFStoParquet._finalize_line_gid(lines, sequence, name)
+        return GTFStoParquet._finalize_line_gid(lines, sequence)
 
     @staticmethod
     def is_invalid_dist(distance: pd.Series, sequence: pd.DataFrame) -> pd.Series:
@@ -1278,7 +1268,9 @@ class GTFStoParquet:
         # ------------------------------------------------
         # create lines / arcs
         # add line index
-        line_ids = self.get_line_id(df, self.name).to_frame("line_gid")
+        line_ids = self.line_id(df, self.name, split_by="route_gid").to_frame(
+            "line_gid"
+        )
         df = pd.merge(df, line_ids, left_on="seq_id", right_index=True)
         del df["seq_id"]
 
