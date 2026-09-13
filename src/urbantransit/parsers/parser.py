@@ -50,14 +50,14 @@ class GTFSParser:
 
     required_files = REQUIRED_FILES
 
-    def __init__(self, path: Path, fix_inner_folder=False):
+    def __init__(self, path: Path | str, fix_inner_folder=False):
         """init from a path to a zip file or a folder"""
 
-        self.path = path
-        self.base_name = path.stem
+        self.path = Path(path)
+        self.base_name = self.path.stem
 
         if not self.is_dir() and not self.is_zip():
-            raise ValueError(f'{path} is neither a zip file or a directory')
+            raise ValueError(f"{self.path} is neither a zip file or a directory")
 
         if fix_inner_folder and self.has_inner_folder():
             self.fix_dir_in_zip()
@@ -66,7 +66,7 @@ class GTFSParser:
         self.files = self._filenames()
 
         if not self.has_required_files():
-            raise ValueError(f'{path} is missing required files')
+            raise ValueError(f"{self.path} is missing required files")
 
     # validate path is a GTFS dir or zip file
     def is_dir(self):
@@ -79,7 +79,7 @@ class GTFSParser:
         if self.is_dir():
             return {f.name for f in self.path.iterdir() if f.is_file()}
         if self.is_zip():
-            with zipfile.ZipFile(self.path, 'r') as archive:
+            with zipfile.ZipFile(self.path, "r") as archive:
                 files = {x for x in archive.namelist()}
             return files
 
@@ -91,18 +91,18 @@ class GTFSParser:
             return False
 
         # test if either calendar.txt or calendar_dates.txt exist
-        return 'calendar.txt' in self.files or 'calendar_dates.txt' in self.files
+        return "calendar.txt" in self.files or "calendar_dates.txt" in self.files
 
     def calendar_statistics(self):
         """return a dataframe of week, year and number of trips"""
         calendars = self.merged_calendars()
         trips = self.get_trips().data
 
-        calendars = calendars.groupby(['week', 'year', 'service_id']).size()
-        calendars = calendars.to_frame('size').reset_index()
+        calendars = calendars.groupby(["week", "year", "service_id"]).size()
+        calendars = calendars.to_frame("size").reset_index()
 
-        df = pd.merge(trips, calendars, on='service_id', how='left')
-        df = df.groupby(['year', 'week'], sort='ascending')['size'].sum()
+        df = pd.merge(trips, calendars, on="service_id", how="left")
+        df = df.groupby(["year", "week"], sort="ascending")["size"].sum()
 
         return df
 
@@ -162,20 +162,20 @@ class GTFSParser:
 
         # merge cal and cal_dates
         if cal_dates is not None and cal is not None:
-            cal = pd.merge(cal, cal_dates, on=['service_id', 'date'], how='outer')
+            cal = pd.merge(cal, cal_dates, on=["service_id", "date"], how="outer")
 
             # drop if exception_type is 2
             cal = cal.loc[(cal.exception_type == 1) | (cal.exception_type.isna())]
-            del cal['exception_type']
+            del cal["exception_type"]
 
         elif cal is None:
             cal = cal_dates.loc[cal_dates.exception_type == 1].copy()
-            del cal['exception_type']
+            del cal["exception_type"]
 
         cal = cal.reset_index(drop=True)
-        isocal = cal['date'].dt.isocalendar()
-        cal['week'] = isocal.week
-        cal['year'] = isocal.year
+        isocal = cal["date"].dt.isocalendar()
+        cal["week"] = isocal.week
+        cal["year"] = isocal.year
 
         return cal
 
@@ -186,7 +186,7 @@ class GTFSParser:
         if name not in self.files:
             return file_class(None)
 
-        if file_class.file_type == 'csv':
+        if file_class.file_type == "csv":
             df = self._read_csv(name, spec)
 
         # TODO implement geojson parsing of locations
@@ -203,12 +203,12 @@ class GTFSParser:
             include_columns=list(spec.keys()),
             include_missing_columns=True,
             strings_can_be_null=True,
-            timestamp_parsers=['%Y%m%d'],
+            timestamp_parsers=["%Y%m%d"],
         )
-        parse = csv.ParseOptions(delimiter=',')
+        parse = csv.ParseOptions(delimiter=",")
 
         if self.is_zip():
-            with zipfile.ZipFile(self.path, 'r') as archive:
+            with zipfile.ZipFile(self.path, "r") as archive:
                 path = next(
                     x
                     for x in archive.namelist()
@@ -232,12 +232,12 @@ class GTFSParser:
                 parser.to_file(self.path / filename)
 
         # extract files from zip in temporary folder
-        temp_path = self.path.with_stem(self.path.stem + '_temp')
+        temp_path = self.path.with_stem(self.path.stem + "_temp")
 
         with (
-            zipfile.ZipFile(self.path, 'r') as archive,
+            zipfile.ZipFile(self.path, "r") as archive,
             zipfile.ZipFile(
-                temp_path, 'w', compression=zipfile.ZIP_BZIP2, compresslevel=8
+                temp_path, "w", compression=zipfile.ZIP_BZIP2, compresslevel=8
             ) as new_archive,
         ):
             # save new files
@@ -265,14 +265,14 @@ class GTFSParser:
         stops = self.get_stops().data
 
         # simple case : stop_code not in dataframe or filled with nulls
-        if 'stop_code' not in stops.columns or stops['stop_code'].isnull().all():
+        if "stop_code" not in stops.columns or stops["stop_code"].isnull().all():
             return False
 
         df = self.get_stoptimes().data
-        df = df['stop_id'].drop_duplicates()
+        df = df["stop_id"].drop_duplicates()
 
-        match_ids = len(df.loc[df.isin(stops['stop_id'])])
-        match_codes = len(df.loc[df.isin(stops['stop_code'])])
+        match_ids = len(df.loc[df.isin(stops["stop_id"])])
+        match_codes = len(df.loc[df.isin(stops["stop_code"])])
 
         return match_ids < match_codes
 
@@ -282,7 +282,7 @@ class GTFSParser:
         if not self.is_zip():
             return False
 
-        with zipfile.ZipFile(self.path, 'r') as archive:
+        with zipfile.ZipFile(self.path, "r") as archive:
             files = [zipfile.Path(archive, x).is_dir() for x in archive.namelist()]
         return any(files)
 
@@ -291,12 +291,12 @@ class GTFSParser:
             return None  # noqa: RET501
 
         # extract files from zip in temporary folder
-        temp_path = self.path.with_stem(self.path.stem + '_temp')
+        temp_path = self.path.with_stem(self.path.stem + "_temp")
 
         with (
-            zipfile.ZipFile(self.path, 'r') as archive,
+            zipfile.ZipFile(self.path, "r") as archive,
             zipfile.ZipFile(
-                temp_path, 'w', compression=zipfile.ZIP_BZIP2, compresslevel=8
+                temp_path, "w", compression=zipfile.ZIP_BZIP2, compresslevel=8
             ) as new_archive,
         ):
             for file in [
