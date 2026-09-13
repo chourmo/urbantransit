@@ -226,6 +226,151 @@ class GTFSParser:
 
         return True
 
+    def validate_ids(self) -> bool:
+        """Validate the feed and its cross-file identifiers.
+
+        This runs :meth:`validate` first, then checks that every populated
+        foreign-key column refers to an identifier in the corresponding file.
+        """
+
+        self.validate()
+
+        agency = self._parser_cache[GTFSAgencyParser].data
+        routes = self._parser_cache[GTFSRoutesParser].data
+        stops = self._parser_cache[GTFSStopsParser].data
+        trips = self._parser_cache[GTFSTripsParser].data
+        stop_times = self._parser_cache[GTFSStopTimesParser].data
+        shapes = self._parser_cache[GTFSShapesParser].data
+        levels = self._parser_cache[GTFSLevelsParser].data
+        transfers = self._parser_cache[GTFSTransfersParser].data
+        calendar = self._parser_cache[GTFSCalendarParser].data
+        calendar_dates = self._parser_cache[GTFSCalendarDatesParser].data
+
+        self._validate_reference(
+            routes,
+            "agency_id",
+            agency,
+            "agency_id",
+            "routes.txt",
+        )
+        self._validate_reference(
+            trips,
+            "route_id",
+            routes,
+            "route_id",
+            "trips.txt",
+        )
+        self._validate_reference(
+            trips,
+            "service_id",
+            pd.concat(
+                [calendar[["service_id"]], calendar_dates[["service_id"]]],
+                ignore_index=True,
+            ),
+            "service_id",
+            "trips.txt",
+        )
+        self._validate_reference(
+            trips,
+            "shape_id",
+            shapes,
+            "shape_id",
+            "trips.txt",
+        )
+        self._validate_reference(
+            stop_times,
+            "trip_id",
+            trips,
+            "trip_id",
+            "stop_times.txt",
+        )
+        self._validate_reference(
+            stop_times,
+            "stop_id",
+            stops,
+            "stop_id",
+            "stop_times.txt",
+        )
+        self._validate_reference(
+            stops,
+            "parent_station",
+            stops,
+            "stop_id",
+            "stops.txt",
+        )
+        self._validate_reference(
+            stops,
+            "level_id",
+            levels,
+            "level_id",
+            "stops.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "from_stop_id",
+            stops,
+            "stop_id",
+            "transfers.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "to_stop_id",
+            stops,
+            "stop_id",
+            "transfers.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "from_route_id",
+            routes,
+            "route_id",
+            "transfers.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "to_route_id",
+            routes,
+            "route_id",
+            "transfers.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "from_trip_id",
+            trips,
+            "trip_id",
+            "transfers.txt",
+        )
+        self._validate_reference(
+            transfers,
+            "to_trip_id",
+            trips,
+            "trip_id",
+            "transfers.txt",
+        )
+
+        return True
+
+    @staticmethod
+    def _validate_reference(
+        source: pd.DataFrame,
+        source_field: str,
+        target: pd.DataFrame,
+        target_field: str,
+        source_filename: str,
+    ) -> None:
+        values = source[source_field].dropna()
+        if values.empty:
+            return
+
+        target_values = target[target_field].dropna()
+        missing = values[~values.isin(target_values)].drop_duplicates()
+        if not missing.empty:
+            identifiers = ", ".join(str(value) for value in missing.tolist())
+            raise ValueError(
+                f"{source_filename}.{source_field} contains unknown identifiers: "
+                f"{identifiers}"
+            )
+
     def _validate_enum(self, parser_class, field: str, values) -> None:
         if parser_class.filename not in self.files:
             return
