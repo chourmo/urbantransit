@@ -1,4 +1,5 @@
 __all__ = [
+    "DayTime",
     "GTFSParser",
     "GTFStoParquet",
     "Transit",
@@ -9,6 +10,10 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "DayTime":
+        from .utils.time import DayTime
+
+        return DayTime
     if name == "GTFSParser":
         from .parsers import GTFSParser
 
