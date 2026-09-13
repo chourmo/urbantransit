@@ -68,6 +68,9 @@ class GTFSParser:
         if not self.has_required_files():
             raise ValueError(f"{self.path} is missing required files")
 
+        # cache of parser objects returned by the get_ methods, keyed by parser class
+        self._parser_cache: dict[type, Any] = {}
+
     # validate path is a GTFS dir or zip file
     def is_dir(self):
         return self.path.is_dir()
@@ -180,18 +183,26 @@ class GTFSParser:
         return cal
 
     def _get_parser(self, file_class):
+        """Build (or return the cached) parser instance for a given parser class"""
+
+        if file_class in self._parser_cache:
+            return self._parser_cache[file_class]
+
         name = file_class.filename
         spec = file_class.spec
 
         if name not in self.files:
-            return file_class(None)
+            parser = file_class(None)
+        else:
+            if file_class.file_type == "csv":
+                df = self._read_csv(name, spec)
 
-        if file_class.file_type == "csv":
-            df = self._read_csv(name, spec)
+            # TODO implement geojson parsing of locations
 
-        # TODO implement geojson parsing of locations
+            parser = file_class(df, base_name=self.base_name)
 
-        return file_class(df, base_name=self.base_name)
+        self._parser_cache[file_class] = parser
+        return parser
 
     def _read_csv(self, name: str, spec: dict[str, Any]) -> pd.DataFrame:
         """read csv with pyarrow engine, return None if name does not exist"""
@@ -255,6 +266,9 @@ class GTFSParser:
                 )
 
         self.path = temp_path.replace(self.path)
+
+        # invalidate cached parsers, since underlying files have changed
+        self._parser_cache.clear()
 
     # ----------------------------------------------------------------------------------
     # global test and fix functions
