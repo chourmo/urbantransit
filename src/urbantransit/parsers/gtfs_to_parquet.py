@@ -69,6 +69,17 @@ class GTFStoParquet:
         self.name = self.path.stem
 
         parser = GTFSParser(self.path)
+
+        # validate that the week and year are present in the feed and have 7 valid days
+        calendar_stats = parser.calendar_statistics()
+        if not (
+            (calendar_stats.index.get_level_values("year") == year)
+            & (calendar_stats.index.get_level_values("week") == week)
+        ).any():
+            raise ValueError(f"Week {week} and year {year} are not present in the feed")
+        if calendar_stats.loc[(year, week), "days_of_week"] != 7:
+            raise ValueError(f"Week {week} and year {year} do not have 7 valid days")
+
         self.agencies = self.parse_agency(parser)
         self.feedinfo = self.parse_feedinfo(parser)
 
