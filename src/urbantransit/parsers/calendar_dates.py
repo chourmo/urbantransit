@@ -11,7 +11,11 @@ class GTFSCalendarDatesParser(_ConfiguredGTFSFileParser):
 
     filename: str = 'calendar_dates.txt'
     is_required: bool = False
-    unique_id: str | None = 'service_id'
+    unique_id: str | tuple[str, ...] | None = (
+        'service_id',
+        'date',
+        'exception_type',
+    )
     file_type = 'csv'
     spec = CALENDAR_DATES_SPEC
     defaults = CALENDAR_DATES_DEFAULTS

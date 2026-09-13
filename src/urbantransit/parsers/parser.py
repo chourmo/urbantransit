@@ -96,6 +96,155 @@ class GTFSParser:
         # test if either calendar.txt or calendar_dates.txt exist
         return "calendar.txt" in self.files or "calendar_dates.txt" in self.files
 
+    def validate(self) -> bool:
+        """Validate every supported GTFS file in the feed.
+
+        Each parser validates its file while loading it, including required
+        columns and unique identifiers. Optional files are also loaded when
+        present. Parsing or validation errors are raised to the caller.
+        """
+
+        parser_classes = (
+            GTFSAgencyParser,
+            GTFSRoutesParser,
+            GTFSStopsParser,
+            GTFSTripsParser,
+            GTFSStopTimesParser,
+            GTFSCalendarParser,
+            GTFSCalendarDatesParser,
+            GTFSShapesParser,
+            GTFSFeedInfoParser,
+            GTFSTransfersParser,
+            GTFSLevelsParser,
+        )
+
+        for parser_class in parser_classes:
+            self._get_parser(parser_class)
+
+        required_fields = {
+            GTFSAgencyParser: ("agency_name", "agency_url", "agency_timezone"),
+            GTFSRoutesParser: ("route_id", "route_type"),
+            GTFSStopsParser: ("stop_id", "stop_name"),
+            GTFSTripsParser: ("route_id", "service_id", "trip_id"),
+            GTFSStopTimesParser: ("trip_id", "stop_id", "stop_sequence"),
+            GTFSCalendarParser: (
+                "service_id",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+                "start_date",
+                "end_date",
+            ),
+            GTFSCalendarDatesParser: ("service_id", "date", "exception_type"),
+            GTFSShapesParser: (
+                "shape_id",
+                "shape_pt_lat",
+                "shape_pt_lon",
+                "shape_pt_sequence",
+            ),
+            GTFSFeedInfoParser: (
+                "feed_publisher_name",
+                "feed_publisher_url",
+                "feed_lang",
+            ),
+            GTFSTransfersParser: ("from_stop_id", "to_stop_id", "transfer_type"),
+            GTFSLevelsParser: ("level_id", "level_index"),
+        }
+
+        for parser_class, fields in required_fields.items():
+            if parser_class.filename not in self.files:
+                continue
+            data = self._parser_cache[parser_class].data
+            missing = [field for field in fields if data[field].isna().any()]
+            if missing:
+                raise ValueError(
+                    f"{', '.join(missing)} contains null values in "
+                    f"{parser_class.filename}"
+                )
+
+        routes = self._parser_cache[GTFSRoutesParser].data
+        if not routes.empty and routes[["route_short_name", "route_long_name"]].isna().all(axis=1).any():
+            raise ValueError(
+                "at least one of route_short_name or route_long_name is required "
+                "in routes.txt"
+            )
+
+        stop_times = self._parser_cache[GTFSStopTimesParser].data
+        if not stop_times.empty and stop_times[["arrival_time", "departure_time"]].isna().all(axis=1).any():
+            raise ValueError(
+                "at least one of arrival_time or departure_time is required "
+                "in stop_times.txt"
+            )
+
+        stops = self._parser_cache[GTFSStopsParser].data
+        if not stops.empty:
+            location_type = stops["location_type"].fillna(0)
+            missing_coordinates = (
+                (location_type == 0)
+                & (stops[["stop_lat", "stop_lon"]].isna().any(axis=1))
+            )
+            if missing_coordinates.any():
+                raise ValueError(
+                    "stop_lat and stop_lon are required for stops with "
+                    "location_type 0 in stops.txt"
+                )
+
+        self._validate_enum(GTFSRoutesParser, "route_type", range(12))
+        self._validate_enum(GTFSStopsParser, "location_type", range(6))
+        self._validate_enum(GTFSStopsParser, "wheelchair_boarding", range(3))
+        self._validate_enum(GTFSTripsParser, "direction_id", range(2))
+        self._validate_enum(GTFSTripsParser, "wheelchair_accessible", range(3))
+        self._validate_enum(GTFSTripsParser, "bikes_allowed", range(3))
+        self._validate_enum(GTFSTripsParser, "cars_allowed", range(3))
+        self._validate_enum(GTFSStopTimesParser, "pickup_type", range(4))
+        self._validate_enum(GTFSStopTimesParser, "drop_off_type", range(4))
+        self._validate_enum(GTFSCalendarDatesParser, "exception_type", (1, 2))
+        self._validate_enum(GTFSTransfersParser, "transfer_type", range(4))
+
+        self._validate_range(GTFSStopsParser, "stop_lat", -90, 90)
+        self._validate_range(GTFSStopsParser, "stop_lon", -180, 180)
+        self._validate_range(GTFSShapesParser, "shape_pt_lat", -90, 90)
+        self._validate_range(GTFSShapesParser, "shape_pt_lon", -180, 180)
+        self._validate_range(GTFSShapesParser, "shape_pt_sequence", 0, None)
+        self._validate_range(GTFSStopTimesParser, "stop_sequence", 0, None)
+        self._validate_range(GTFSStopTimesParser, "shape_dist_traveled", 0, None)
+        self._validate_range(GTFSTransfersParser, "min_transfer_time", 0, None)
+
+        calendar = self._parser_cache[GTFSCalendarParser].data
+        if not calendar.empty and (calendar["start_date"] > calendar["end_date"]).any():
+            raise ValueError("start_date must not be after end_date in calendar.txt")
+
+        time_pattern = r"^(?:[0-9]+):[0-5][0-9]:[0-5][0-9]$"
+        for field in ("arrival_time", "departure_time"):
+            values = stop_times[field].dropna().astype("string")
+            if not values.str.fullmatch(time_pattern).all():
+                raise ValueError(f"invalid {field} values in stop_times.txt")
+
+        return True
+
+    def _validate_enum(self, parser_class, field: str, values) -> None:
+        if parser_class.filename not in self.files:
+            return
+        data = self._parser_cache[parser_class].data[field].dropna()
+        if not data.isin(values).all():
+            raise ValueError(f"invalid {field} values in {parser_class.filename}")
+
+    def _validate_range(
+        self, parser_class, field: str, minimum: float, maximum: float | None
+    ) -> None:
+        if parser_class.filename not in self.files:
+            return
+        data = self._parser_cache[parser_class].data[field].dropna()
+        invalid = data < minimum
+        if maximum is not None:
+            invalid = invalid | (data > maximum)
+        if invalid.any():
+            raise ValueError(f"invalid {field} values in {parser_class.filename}")
+
     def calendar_statistics(self):
         """return a dataframe with number of unique days in week and number of trips for each week and year"""
         calendars = self.merged_calendars()

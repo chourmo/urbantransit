@@ -15,7 +15,7 @@ class GTFSFileParser:
         defaults: dict[str, Any] | None = None,
         boolean_cols: dict[str, tuple[Any, Any, Any]] | None = None,
         is_required: bool = True,
-        unique_id: str | None = None,
+        unique_id: str | tuple[str, ...] | None = None,
         file_type='csv',
         base_name: str | None = None,
     ):
@@ -59,10 +59,16 @@ class GTFSFileParser:
 
         # check unicity of unique_ids
         if unique_id is not None:
-            if not unique_id not in df.columns:
-                raise ValueError(f'{unique_id} is missing in {filename}')
-            if not df[unique_id].is_unique:
-                raise ValueError(f'{unique_id} is not unique in {filename}')
+            unique_columns = (
+                (unique_id,) if isinstance(unique_id, str) else unique_id
+            )
+            missing = set(unique_columns) - set(df.columns)
+            if missing:
+                raise ValueError(f'{missing} is missing in {filename}')
+            if df.duplicated(list(unique_columns)).any():
+                raise ValueError(
+                    f'{", ".join(unique_columns)} is not unique in {filename}'
+                )
 
         # parse booleans
         if boolean_cols is not None:
@@ -142,7 +148,7 @@ class GTFSFileParser:
 class _ConfiguredGTFSFileParser(GTFSFileParser):
     filename: str = ''
     is_required: bool = True
-    unique_id: str | None = None
+    unique_id: str | tuple[str, ...] | None = None
     file_type = 'csv'
     spec: dict[str, Any] = {}
     defaults: dict[str, Any] | None = None

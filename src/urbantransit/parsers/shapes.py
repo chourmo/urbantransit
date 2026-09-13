@@ -12,7 +12,7 @@ class GTFSShapesParser(_ConfiguredGTFSFileParser):
 
     filename: str = 'shapes.txt'
     is_required: bool = False
-    unique_id: str | None = 'shape_id'
+    unique_id: str | tuple[str, ...] | None = ('shape_id', 'shape_pt_sequence')
     file_type = 'csv'
     spec = SHAPES_SPEC
     defaults = SHAPES_DEFAULTS

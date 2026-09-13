@@ -9,7 +9,7 @@ from .feed_info_schema import (
 class GTFSFeedInfoParser(_ConfiguredGTFSFileParser):
     """Class to parse GTFS FeedInfo.txt file"""
 
-    filename: str = 'feed_info'
+    filename: str = 'feed_info.txt'
     is_required: bool = False
     unique_id: str | None = None
     file_type = 'csv'

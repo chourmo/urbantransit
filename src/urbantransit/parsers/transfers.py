@@ -9,7 +9,7 @@ from .transfers_schema import (
 class GTFSTransfersParser(_ConfiguredGTFSFileParser):
     """Class to parse GTFS Transfers.txt file"""
 
-    filename: str = 'transfers'
+    filename: str = 'transfers.txt'
     is_required: bool = False
     unique_id: str | None = None
     file_type = 'csv'
