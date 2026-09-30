@@ -24,9 +24,7 @@ class Lines:
         self.week = week
 
     @classmethod
-    def from_parquet_dataset(
-        cls, path: str | Path, year: int, week: int
-    ) -> "Lines":
+    def from_parquet_dataset(cls, path: str | Path, year: int, week: int) -> "Lines":
         """Create Lines from a dataset for year and week."""
 
         file_path = Path(path) / cls.DATASET
