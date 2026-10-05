@@ -4,6 +4,7 @@ __all__ = [
     "GTFStoParquet",
     "Transit",
     "TransitGraph",
+    "TransportDataGouv",
     "clean_gtfs_folder",
     "parse_gtfs_folder",
 ]
@@ -38,4 +39,8 @@ def __getattr__(name: str):
         from .transit import Transit
 
         return Transit
+    if name == "TransportDataGouv":
+        from .downloader import TransportDataGouv
+
+        return TransportDataGouv
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
