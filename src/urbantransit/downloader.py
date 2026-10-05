@@ -183,9 +183,12 @@ class TransportDataGouv:
                 continue
             if region and not self._in_region(ds, region):
                 continue
-            if dataset and dataset not in (ds.get("id"), ds.get("slug")):
-                if _norm(dataset) not in _norm(ds.get("title", "")):
-                    continue
+            if (
+                dataset
+                and dataset not in (ds.get("id"), ds.get("slug"))
+                and _norm(dataset) not in _norm(ds.get("title", ""))
+            ):
+                continue
             for r in ds.get("resources") or []:
                 if format and _norm(r.get("format", "")) != _norm(format):
                     continue
@@ -218,7 +221,9 @@ class TransportDataGouv:
         fmt = str(row["format"] or "").lower()
         suffix = Path(urllib.parse.urlparse(str(row["url"])).path).suffix.lower()
         if fmt in ("gtfs", "netex", "gtfs-rt", "gbfs") or not suffix:
-            suffix = ".zip" if fmt in ("gtfs", "netex") else (suffix or f".{fmt or 'bin'}")
+            suffix = (
+                ".zip" if fmt in ("gtfs", "netex") else (suffix or f".{fmt or 'bin'}")
+            )
         slug = re.sub(r"[^\w-]+", "_", str(row["dataset_slug"] or row["dataset_id"]))
         return f"{slug}_{row['resource_id']}{suffix}"
 
