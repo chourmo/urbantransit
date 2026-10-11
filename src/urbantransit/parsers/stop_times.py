@@ -20,6 +20,9 @@ class GTFSStopTimesParser(_ConfiguredGTFSFileParser):
     spec = STOP_TIMES_SPEC
     defaults = STOP_TIMES_DEFAULTS
     boolean_cols = STOP_TIMES_BOOLEAN_COLS
+    required_fields = ("trip_id", "stop_id", "stop_sequence")
+    enum_fields = {"pickup_type": range(4), "drop_off_type": range(4)}
+    range_fields = {"stop_sequence": (0, None), "shape_dist_traveled": (0, None)}
 
     def set_sequence_id(
         self, id: str = 'trip_id', name: str = 'seq_id'
@@ -125,3 +128,17 @@ class GTFSStopTimesParser(_ConfiguredGTFSFileParser):
             )
 
         self.data = df
+
+    def validate_custom(self) -> None:
+        times = self.data[["arrival_time", "departure_time"]]
+        if times.isna().all(axis=1).any():
+            raise ValueError(
+                "at least one of arrival_time or departure_time is required "
+                "in stop_times.txt"
+            )
+
+        time_pattern = r"^(?:[0-9]+):[0-5][0-9]:[0-5][0-9]$"
+        for field in ("arrival_time", "departure_time"):
+            values = self.data[field].dropna().astype("string")
+            if not values.str.fullmatch(time_pattern).all():
+                raise ValueError(f"invalid {field} values in stop_times.txt")

@@ -12,3 +12,5 @@ class GTFSTripsParser(_ConfiguredGTFSFileParser):
     spec = TRIPS_SPEC
     defaults = TRIPS_DEFAULTS
     boolean_cols = TRIPS_BOOLEAN_COLS
+    required_fields = ("route_id", "service_id", "trip_id")
+    enum_fields = {"direction_id": range(2), "wheelchair_accessible": range(3), "bikes_allowed": range(3), "cars_allowed": range(3)}

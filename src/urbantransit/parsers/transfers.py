@@ -16,3 +16,6 @@ class GTFSTransfersParser(_ConfiguredGTFSFileParser):
     spec = TRANSFERS_SPEC
     defaults = TRANSFERS_DEFAULTS
     boolean_cols = TRANSFERS_BOOLEAN_COLS
+    required_fields = ("from_stop_id", "to_stop_id", "transfer_type")
+    enum_fields = {"transfer_type": range(4)}
+    range_fields = {"min_transfer_time": (0, None)}

@@ -12,3 +12,4 @@ class GTFSLevelsParser(_ConfiguredGTFSFileParser):
     spec = LEVELS_SPEC
     defaults = LEVELS_DEFAULTS
     boolean_cols = LEVELS_BOOLEAN_COLS
+    required_fields = ("level_id", "level_index")

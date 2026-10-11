@@ -82,6 +82,62 @@ class GTFSFileParser:
         df = self.set_defaults(df, spec, defaults)
         self.data = df
 
+    # validation rules, overridden by each file parser
+    required_fields: tuple[str, ...] = ()
+    enum_fields: dict[str, Any] = {}
+    range_fields: dict[str, tuple[float, float | None]] = {}
+
+    def validate(self) -> None:
+        """Validate the file content, raise a ValueError if invalid.
+
+        Checks that required fields have no null values, that enumerated fields
+        only contain allowed values and that numeric fields are in their range.
+        Parsers add their own rules by overriding `validate_custom`.
+        """
+
+        if self.empty:
+            return
+
+        self._validate_required()
+        for field, values in self.enum_fields.items():
+            self._validate_enum(field, values)
+        for field, (minimum, maximum) in self.range_fields.items():
+            self._validate_range(field, minimum, maximum)
+        self.validate_custom()
+
+    def validate_custom(self) -> None:
+        """Hook for file specific validation rules."""
+
+    def _validate_required(self) -> None:
+        data = self.data
+        missing = [f for f in self.required_fields if f not in data.columns]
+        if missing:
+            raise ValueError(f"{', '.join(missing)} missing in {self.filename}")
+        nulls = [f for f in self.required_fields if data[f].isna().any()]
+        if nulls:
+            raise ValueError(
+                f"{', '.join(nulls)} contains null values in {self.filename}"
+            )
+
+    def _validate_enum(self, field: str, values) -> None:
+        if field not in self.data.columns:
+            return
+        data = self.data[field].dropna()
+        if not data.isin(values).all():
+            raise ValueError(f"invalid {field} values in {self.filename}")
+
+    def _validate_range(
+        self, field: str, minimum: float, maximum: float | None
+    ) -> None:
+        if field not in self.data.columns:
+            return
+        data = self.data[field].dropna()
+        invalid = data < minimum
+        if maximum is not None:
+            invalid = invalid | (data > maximum)
+        if invalid.any():
+            raise ValueError(f"invalid {field} values in {self.filename}")
+
     def empty_frame(self):
         """return an empty dataframe with spec columns and defaults values"""
 

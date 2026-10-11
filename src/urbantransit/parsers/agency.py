@@ -12,3 +12,4 @@ class GTFSAgencyParser(_ConfiguredGTFSFileParser):
     spec = AGENCY_SPEC
     defaults = AGENCY_DEFAULTS
     boolean_cols = AGENCY_BOOLEAN_COLS
+    required_fields = ("agency_name", "agency_url", "agency_timezone")

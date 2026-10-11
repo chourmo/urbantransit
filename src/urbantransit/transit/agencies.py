@@ -54,11 +54,7 @@ class Agencies:
         file_path = Path(path) / cls.FILE
 
         try:
-            table = gpd.read_parquet(
-                file_path,
-                engine="pyarrow",
-                to_pandas_kwargs={"types_mapper": pd.ArrowDtype},
-            )
+            table = pd.read_parquet(file_path, dtype_backend="pyarrow")
             return cls(table, year, week)
 
         except Exception as e:

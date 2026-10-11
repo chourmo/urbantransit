@@ -20,3 +20,5 @@ class GTFSCalendarDatesParser(_ConfiguredGTFSFileParser):
     spec = CALENDAR_DATES_SPEC
     defaults = CALENDAR_DATES_DEFAULTS
     boolean_cols = CALENDAR_DATES_BOOLEAN_COLS
+    required_fields = ("service_id", "date", "exception_type")
+    enum_fields = {"exception_type": (1, 2)}

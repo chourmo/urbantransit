@@ -17,6 +17,7 @@ class GTFSCalendarParser(_ConfiguredGTFSFileParser):
     spec = CALENDAR_SPEC
     defaults = CALENDAR_DEFAULTS
     boolean_cols = CALENDAR_BOOLEAN_COLS
+    required_fields = ("service_id", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "start_date", "end_date")
 
     WEEKDAYS = [
         'monday',
@@ -103,3 +104,7 @@ class GTFSCalendarParser(_ConfiguredGTFSFileParser):
         self.data = df
 
         return None
+
+    def validate_custom(self) -> None:
+        if self.has_inverted_start_end_dates():
+            raise ValueError("start_date must not be after end_date in calendar.txt")

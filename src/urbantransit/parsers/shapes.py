@@ -17,6 +17,8 @@ class GTFSShapesParser(_ConfiguredGTFSFileParser):
     spec = SHAPES_SPEC
     defaults = SHAPES_DEFAULTS
     boolean_cols = SHAPES_BOOLEAN_COLS
+    required_fields = ("shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence")
+    range_fields = {"shape_pt_lat": (-90, 90), "shape_pt_lon": (-180, 180), "shape_pt_sequence": (0, None)}
 
     def filter_shape_ids(self, shape_ids: pd.Series) -> None:
         """Filter shapes to keep only specified shape_ids"""

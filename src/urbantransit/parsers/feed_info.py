@@ -16,3 +16,4 @@ class GTFSFeedInfoParser(_ConfiguredGTFSFileParser):
     spec = FEED_INFO_SPEC
     defaults = FEED_INFO_DEFAULTS
     boolean_cols = FEED_INFO_BOOLEAN_COLS
+    required_fields = ("feed_publisher_name", "feed_publisher_url", "feed_lang")
