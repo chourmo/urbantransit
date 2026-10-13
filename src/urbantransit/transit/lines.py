@@ -56,7 +56,6 @@ class Lines:
         try:
             table = gpd.read_parquet(
                 file_path,
-                engine="pyarrow",
                 to_pandas_kwargs={"types_mapper": pd.ArrowDtype},
             )
             return cls(table, year, week)
