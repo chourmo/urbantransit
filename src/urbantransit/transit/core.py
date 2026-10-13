@@ -14,6 +14,7 @@ from .transfers import DISTANCE_TYPE, Transfers
 if TYPE_CHECKING:
     from ..graph import TransitGraph
 
+
 class Transit:
     """High-level transit dataset built from parquet-backed GTFS tables.
 
@@ -69,7 +70,11 @@ class Transit:
 
     @classmethod
     def from_parquet_dataset(
-        cls, path: str | Path, crs: str, year: int | None = None, week: int | None = None
+        cls,
+        path: str | Path,
+        crs: str,
+        year: int | None = None,
+        week: int | None = None,
     ) -> "Transit":
         lines = Lines.from_parquet_dataset(path, year=year, week=week)
         stops = Stops.from_parquet_dataset(path, year=year, week=week)
@@ -78,12 +83,20 @@ class Transit:
 
     @classmethod
     def from_parquet_dir(
-        cls, path: str | Path, crs: str, year: int | None = None, week: int | None = None
+        cls,
+        path: str | Path,
+        crs: str,
+        year: int | None = None,
+        week: int | None = None,
     ) -> "Transit":
         lines = Lines.from_parquet(path, year=year, week=week)
         stops = Stops.from_parquet(path, year=year, week=week)
         agencies = Agencies.from_parquet(path, year=year, week=week)
-        transfers = Transfers.from_parquet(path, crs=crs, year=year, week=week)
+
+        if "transfers.parquet" in [f.name for f in Path(path).glob("*.parquet")]:
+            transfers = Transfers.from_parquet(path, crs=crs, year=year, week=week)
+        else:
+            transfers = None
         return cls(crs, lines, stops, agencies, transfers)
 
     def to_parquet(self, save_path: str | Path):
