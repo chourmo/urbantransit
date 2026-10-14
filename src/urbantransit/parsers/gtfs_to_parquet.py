@@ -18,6 +18,7 @@ from geometryhelpers import (
 
 from urbantransit.utils.ids import hash_ids, intersect_ids, random_ids, renumber_ids
 from urbantransit.utils.logging import transitlog
+from urbantransit.utils.parquet import add_metadata
 
 from ..constants import LAST_STOP
 from .parser import GTFSParser
@@ -217,19 +218,25 @@ class GTFStoParquet:
             feedinfo.index = agencies.index
             agencies.loc[:, feedinfo.columns] = feedinfo
 
-        agencies.to_parquet(self.new_file_path(path), index=True)
+        file_path = self.new_file_path(path)
+        add_metadata(agencies, self.year, self.week)
+        agencies.to_parquet(file_path, index=True)
 
     def stops_to_parquet(self, path: Path, overwrite: bool = False) -> None:
         """ " Save stops to parquet file at Path."""
         if overwrite:
             self._clear_parquet_files(path)
-        self.stops.to_parquet(self.new_file_path(path), index=True)
+        file_path = self.new_file_path(path)
+        add_metadata(self.stops, self.year, self.week)
+        self.stops.to_parquet(file_path, index=True)
 
     def lines_to_parquet(self, path: Path, overwrite: bool = False) -> None:
         """ " Save lines to parquet file at Path."""
         if overwrite:
             self._clear_parquet_files(path)
-        self.lines.to_parquet(self.new_file_path(path), index=False)
+        file_path = self.new_file_path(path)
+        add_metadata(self.lines, self.year, self.week)
+        self.lines.to_parquet(file_path, index=False)
 
     def to_parquet(self, path: str | Path, overwrite: bool = False):
         """Save to parquet.

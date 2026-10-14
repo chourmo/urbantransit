@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 from geometryhelpers import group_boundingbox
 
 from ..utils.ids import filter_ids
+from ..utils.parquet import add_metadata, read_metadata
 
 
 class Agencies:
@@ -28,7 +29,7 @@ class Agencies:
         self.week = week
 
     @classmethod
-    def from_parquet_dataset(cls, path: str | Path, year: int, week: int) -> "Agencies":
+    def from_dataset(cls, path: str | Path, year: int, week: int) -> "Agencies":
         """Create Agencies from a dataset for year and week"""
 
         file_path = Path(path) / cls.DATASET
@@ -38,6 +39,7 @@ class Agencies:
             table = dataset.to_table(
                 filter=((ds.field("year") == year) & (ds.field("week") == week))
             )
+            year, week = read_metadata(table.schema, year, week)
             table = table.to_pandas(types_mapper=pd.ArrowDtype)
 
             return cls(table, year, week)
@@ -48,12 +50,15 @@ class Agencies:
             ) from e
 
     @classmethod
-    def from_parquet(cls, path: str | Path, year: int, week: int) -> "Agencies":
+    def from_parquet(
+        cls, path: str | Path, year: int | None = None, week: int | None = None
+    ) -> "Agencies":
         """Create Agencies from a path directory"""
 
         file_path = Path(path) / cls.FILE
 
         try:
+            year, week = read_metadata(pq.read_schema(file_path), year, week)
             table = pd.read_parquet(file_path, dtype_backend="pyarrow")
             return cls(table, year, week)
 
@@ -73,6 +78,7 @@ class Agencies:
         else:
             data = self.data
 
+        add_metadata(data, self.year, self.week)
         table = pa.Table.from_pandas(data, preserve_index=False)
         write_path = path / self.FILE
         pq.write_table(table, write_path)

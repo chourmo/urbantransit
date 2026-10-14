@@ -3,11 +3,13 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 from geometryhelpers import first_point, last_point
 
 from ..constants import LAST_STOP
 from ..utils.ids import filter_ids
 from ..utils.logging import transitlog
+from ..utils.parquet import add_metadata, read_metadata
 from ..utils.time import DayTime
 
 
@@ -24,7 +26,7 @@ class Lines:
         self.week = week
 
     @classmethod
-    def from_parquet_dataset(cls, path: str | Path, year: int, week: int) -> "Lines":
+    def from_dataset(cls, path: str | Path, year: int, week: int) -> "Lines":
         """Create Lines from a dataset for year and week."""
 
         file_path = Path(path) / cls.DATASET
@@ -34,6 +36,7 @@ class Lines:
             table = dataset.to_table(
                 filter=((ds.field("year") == year) & (ds.field("week") == week))
             )
+            year, week = read_metadata(table.schema, year, week)
             table = gpd.GeoDataFrame.from_arrow(
                 table,
                 geometry="geometry",
@@ -48,12 +51,15 @@ class Lines:
             ) from e
 
     @classmethod
-    def from_parquet(cls, path: str | Path, year: int, week: int) -> "Lines":
+    def from_parquet(
+        cls, path: str | Path, year: int | None = None, week: int | None = None
+    ) -> "Lines":
         """Create Lines from a directory."""
 
         file_path = Path(path) / cls.FILE
 
         try:
+            year, week = read_metadata(pq.read_schema(file_path), year, week)
             table = gpd.read_parquet(
                 file_path,
                 to_pandas_kwargs={"types_mapper": pd.ArrowDtype},
@@ -76,7 +82,9 @@ class Lines:
         else:
             data = self.data
 
-        data.to_parquet(path / self.FILE, index=False)
+        file_path = path / self.FILE
+        add_metadata(data, self.year, self.week)
+        data.to_parquet(file_path, index=False)
 
     def drop_on_demand(self) -> "Lines":
         data = self.data

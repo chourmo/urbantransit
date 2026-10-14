@@ -33,8 +33,6 @@ class Transit:
         Agency and route metadata.
     transfers : Transfers | None, default=None
         Optional transfer metadata derived from networks or from parquet files.
-    on_demand : bool, default=True
-        Reserved option for future on-demand corridor handling.
 
     Notes
     -----
@@ -44,48 +42,55 @@ class Transit:
 
     def __init__(
         self,
-        crs: str,
         lines: Lines,
         stops: Stops,
         agencies: Agencies,
         transfers: Transfers | None = None,
-        on_demand: bool = True,
     ):
-        self.crs = crs
         self.lines = lines
         self.stops = stops
         self.agencies = agencies
         self.transfers = transfers
 
-        if lines is not None:
-            self.year = self.lines.year
-            self.week = self.lines.week
-        else:
-            self.year = None
-            self.week = None
+        self.year = self.lines.year
+        self.week = self.lines.week
 
-        if self.lines is not None:
-            self._sync_agencies_to_lines()
-            self._sync_stops_to_lines()
+        # compare crs and add to attributes
+        line_crs = self.lines.data.crs
+        stop_crs = self.stops.data.crs
+
+        if transfers is not None:
+            transfer_crs = self.transfers.data.crs
+            if line_crs != transfer_crs:
+                raise ValueError(
+                    f"CRS mismatch: lines CRS is '{line_crs}' but transfers CRS is '{transfer_crs}'"
+                )
+
+        if line_crs != stop_crs:
+            raise ValueError(
+                f"CRS mismatch: lines CRS is '{line_crs}' but stops CRS is '{stop_crs}'"
+            )
+        self.crs = line_crs
+
+        self._sync_agencies_to_lines()
+        self._sync_stops_to_lines()
 
     @classmethod
-    def from_parquet_dataset(
+    def from_dataset(
         cls,
         path: str | Path,
-        crs: str,
         year: int | None = None,
         week: int | None = None,
     ) -> "Transit":
-        lines = Lines.from_parquet_dataset(path, year=year, week=week)
-        stops = Stops.from_parquet_dataset(path, year=year, week=week)
-        agencies = Agencies.from_parquet_dataset(path, year=year, week=week)
-        return cls(crs, lines, stops, agencies)
+        lines = Lines.from_dataset(path, year=year, week=week)
+        stops = Stops.from_dataset(path, year=year, week=week)
+        agencies = Agencies.from_dataset(path, year=year, week=week)
+        return cls(lines, stops, agencies)
 
     @classmethod
-    def from_parquet_dir(
+    def from_directory(
         cls,
         path: str | Path,
-        crs: str,
         year: int | None = None,
         week: int | None = None,
     ) -> "Transit":
@@ -94,10 +99,10 @@ class Transit:
         agencies = Agencies.from_parquet(path, year=year, week=week)
 
         if "transfers.parquet" in [f.name for f in Path(path).glob("*.parquet")]:
-            transfers = Transfers.from_parquet(path, crs=crs, year=year, week=week)
+            transfers = Transfers.from_parquet(path, year=year, week=week)
         else:
             transfers = None
-        return cls(crs, lines, stops, agencies, transfers)
+        return cls(lines, stops, agencies, transfers)
 
     def to_parquet(self, save_path: str | Path):
         """Save to Parquet"""
