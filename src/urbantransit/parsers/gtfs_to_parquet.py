@@ -88,7 +88,7 @@ class GTFStoParquet:
         self.lines = self.parse_lines(parser)
 
         if raw:
-            return None
+            return
 
         # force existence between dataframes
         # filter routes from lines and add boundingbox
