@@ -1,5 +1,6 @@
 # GTFS to Parser maping class
 from pathlib import Path
+from uuid import uuid4
 
 import geopandas as gpd
 import listandstruct as ls
@@ -7,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.dataset as ds
+import pyarrow.fs as pafs
 from geometryhelpers import (
     Linestrings,
     Points,
@@ -198,12 +201,24 @@ class GTFStoParquet:
         for f in path.glob("*.parquet"):
             f.unlink()
 
-    def agencies_to_parquet(self, path: Path, overwrite: bool = False) -> None:
-        """Save agencies, routes and feed_info to Parquet at Path."""
+    def _add_partition_columns(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Add year and week columns and Parquet metadata to a table."""
 
-        if overwrite:
-            self._clear_parquet_files(path)
+        data = data.assign(year=self.year, week=self.week)
+        return add_metadata(data, self.year, self.week)
 
+    @staticmethod
+    def _table_file_path(path: str | Path, filename: str, overwrite: bool) -> Path:
+        """Resolve a table output file and reject accidental replacement."""
+
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        file_path = path / filename
+        if file_path.exists() and not overwrite:
+            raise FileExistsError(f"Parquet file already exists: {file_path}")
+        return file_path
+
+    def _agencies_with_routes(self) -> pd.DataFrame:
         routes = self.pack_routes(self.routes)
 
         if "routes" in self.agencies.columns:
@@ -218,39 +233,122 @@ class GTFStoParquet:
             feedinfo.index = agencies.index
             agencies.loc[:, feedinfo.columns] = feedinfo
 
-        file_path = self.new_file_path(path)
-        agencies = add_metadata(agencies, self.year, self.week)
+        return agencies
+
+    @staticmethod
+    def _agency_ids(data: pd.DataFrame) -> pd.Series:
+        """Return agency IDs from a column or named index."""
+
+        if "agency_gid" in data.columns:
+            return data["agency_gid"]
+        if data.index.name == "agency_gid":
+            return pd.Series(data.index, index=data.index)
+        raise ValueError("Dataset table must contain an agency_gid column or index")
+
+    def agencies_to_parquet(self, path: Path, overwrite: bool = False) -> None:
+        """Save agencies, routes and feed_info to Parquet at Path."""
+
+        file_path = self._table_file_path(path, "agencies.parquet", overwrite)
+        agencies = self._add_partition_columns(self._agencies_with_routes())
         agencies.to_parquet(file_path, index=True)
 
     def stops_to_parquet(self, path: Path, overwrite: bool = False) -> None:
-        """ " Save stops to parquet file at Path."""
-        if overwrite:
-            self._clear_parquet_files(path)
-        file_path = self.new_file_path(path)
-        self.stops = add_metadata(self.stops, self.year, self.week)
-        self.stops.to_parquet(file_path, index=True)
+        """Save stops to a Parquet file in Path."""
+        file_path = self._table_file_path(path, "stops.parquet", overwrite)
+        stops = self._add_partition_columns(self.stops)
+        stops.to_parquet(file_path, index=True)
 
     def lines_to_parquet(self, path: Path, overwrite: bool = False) -> None:
-        """ " Save lines to parquet file at Path."""
-        if overwrite:
-            self._clear_parquet_files(path)
-        file_path = self.new_file_path(path)
-        self.lines = add_metadata(self.lines, self.year, self.week)
-        self.lines.to_parquet(file_path, index=False)
+        """Save lines to a Parquet file in Path."""
+        file_path = self._table_file_path(path, "lines.parquet", overwrite)
+        lines = self._add_partition_columns(self.lines)
+        lines.to_parquet(file_path, index=False)
 
-    def to_parquet(self, path: str | Path, overwrite: bool = False):
-        """Save to parquet.
+    def to_dataset(self, path: str | Path, overwrite: bool = False) -> None:
+        """Write agencies, stops, and lines as Hive-partitioned Parquet datasets.
 
-        If overwrite is True, delete existing parquet files at the
-        Agencies, Stops and Lines paths before saving.
+        Data is partitioned by year and week under each table directory.
+        By default, rows for agency IDs already in each table's partition are
+        skipped. If ``overwrite`` is True, the matching partition is replaced.
         """
 
         path = Path(path)
-        agency_path, stop_path, line_path = self.init_parquet_paths(path)
+        tables = (
+            ("Agencies", self._agencies_with_routes(), True),
+            ("Stops", self.stops, True),
+            ("Lines", self.lines, False),
+        )
+        datasets = []
 
-        self.agencies_to_parquet(agency_path, overwrite=overwrite)
-        self.stops_to_parquet(stop_path, overwrite=overwrite)
-        self.lines_to_parquet(line_path, overwrite=overwrite)
+        for name, data, preserve_index in tables:
+            table_path = path / name
+            partition_path = (
+                table_path / f"year={self.year}" / f"week={self.week}"
+            )
+
+            existing_files = list(partition_path.rglob("*.parquet"))
+            if existing_files and not overwrite:
+                existing = ds.dataset(partition_path, format="parquet").to_table(
+                    columns=["agency_gid"]
+                )
+                existing_agency_ids = set(
+                    existing.column("agency_gid").to_pylist()
+                )
+                agency_ids = self._agency_ids(data)
+                data = data.loc[~agency_ids.isin(existing_agency_ids)]
+
+            data = self._add_partition_columns(data)
+            if isinstance(data, gpd.GeoDataFrame):
+                table = pa.table(data.to_arrow(index=preserve_index))
+            else:
+                table = pa.Table.from_pandas(data, preserve_index=preserve_index)
+
+            datasets.append((table_path, table, existing_files))
+
+        for table_path, table, existing_files in datasets:
+            if overwrite and table.num_rows == 0:
+                filesystem = pafs.LocalFileSystem()
+                for file_path in existing_files:
+                    filesystem.delete_file(str(file_path))
+
+            if table.num_rows == 0:
+                continue
+
+            ds.write_dataset(
+                table,
+                table_path,
+                format="parquet",
+                partitioning=["year", "week"],
+                partitioning_flavor="hive",
+                basename_template=f"data-{uuid4().hex}-{{i}}.parquet",
+                existing_data_behavior=(
+                    "delete_matching" if overwrite else "overwrite_or_ignore"
+                ),
+            )
+
+    def to_parquet(self, path: str | Path, overwrite: bool = False):
+        """Save each table as a single Parquet file in the output directory.
+
+        Existing files are replaced only when ``overwrite`` is True.
+        """
+
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        if not overwrite:
+            filenames = ("agencies.parquet", "stops.parquet", "lines.parquet")
+            existing_files = [
+                path / filename
+                for filename in filenames
+                if (path / filename).exists()
+            ]
+            if existing_files:
+                raise FileExistsError(
+                    f"Parquet file already exists: {existing_files[0]}"
+                )
+
+        self.agencies_to_parquet(path, overwrite=overwrite)
+        self.stops_to_parquet(path, overwrite=overwrite)
+        self.lines_to_parquet(path, overwrite=overwrite)
 
     # -----------------------------
     # merge other GTFStoParquet object
