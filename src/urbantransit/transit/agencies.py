@@ -39,7 +39,6 @@ class Agencies:
             table = dataset.to_table(
                 filter=((ds.field("year") == year) & (ds.field("week") == week))
             )
-            year, week = read_metadata(table.schema, year, week)
             table = table.to_pandas(types_mapper=pd.ArrowDtype)
 
             return cls(table, year, week)

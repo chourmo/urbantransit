@@ -35,7 +35,6 @@ class Stops:
             table = dataset.to_table(
                 filter=((ds.field("year") == year) & (ds.field("week") == week))
             )
-            year, week = read_metadata(table.schema, year, week)
 
             table = gpd.GeoDataFrame.from_arrow(
                 table,

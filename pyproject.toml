@@ -4,7 +4,7 @@ description = "Transform and analyse gtfs in a parquet format"
 license = "MIT"
 version = "0.5.9"
 readme = "README.md"
-authors = [{name = "chourmo", email = "vincenttinet@icloud.com"}]
+authors = [{name = "chourmop", email = "vincenttinet@icloud.com"}]
 requires-python = ">= 3.11"
 dependencies = ["pandas", "geopandas", "pyarrow", "scikit-learn"]
 
