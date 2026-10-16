@@ -2,6 +2,7 @@
 
 import json
 
+import pandas as pd
 import pyarrow as pa
 
 METADATA_KEY = b"urbantransit"
