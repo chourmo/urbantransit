@@ -82,7 +82,7 @@ class Stops:
         else:
             data = self.data
         file_path = path / self.FILE
-        add_metadata(data, self.year, self.week)
+        data = add_metadata(data, self.year, self.week)
         data.to_parquet(file_path, index=False)
 
     def filter_gids(self, gids) -> "Stops":

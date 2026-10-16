@@ -219,7 +219,7 @@ class GTFStoParquet:
             agencies.loc[:, feedinfo.columns] = feedinfo
 
         file_path = self.new_file_path(path)
-        add_metadata(agencies, self.year, self.week)
+        agencies = add_metadata(agencies, self.year, self.week)
         agencies.to_parquet(file_path, index=True)
 
     def stops_to_parquet(self, path: Path, overwrite: bool = False) -> None:
@@ -227,7 +227,7 @@ class GTFStoParquet:
         if overwrite:
             self._clear_parquet_files(path)
         file_path = self.new_file_path(path)
-        add_metadata(self.stops, self.year, self.week)
+        self.stops = add_metadata(self.stops, self.year, self.week)
         self.stops.to_parquet(file_path, index=True)
 
     def lines_to_parquet(self, path: Path, overwrite: bool = False) -> None:
@@ -235,7 +235,7 @@ class GTFStoParquet:
         if overwrite:
             self._clear_parquet_files(path)
         file_path = self.new_file_path(path)
-        add_metadata(self.lines, self.year, self.week)
+        self.lines = add_metadata(self.lines, self.year, self.week)
         self.lines.to_parquet(file_path, index=False)
 
     def to_parquet(self, path: str | Path, overwrite: bool = False):

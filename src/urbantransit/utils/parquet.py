@@ -10,13 +10,15 @@ PANDAS_ATTRS_KEY = b"PANDAS_ATTRS"
 METADATA_VERSION = 1
 
 
-def add_metadata(data, year: int, week: int) -> None:
+def add_metadata(data, year: int, week: int) -> pd.DataFrame:
     """Add UrbanTransit metadata to dataframe attributes."""
-    data.attrs[DATAFRAME_METADATA_KEY] = {
+    res = data.copy()
+    res.attrs[DATAFRAME_METADATA_KEY] = {
         "metadata_version": METADATA_VERSION,
         "year": year,
         "week": week,
     }
+    return res
 
 
 def read_metadata(

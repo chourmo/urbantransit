@@ -78,7 +78,7 @@ class Agencies:
         else:
             data = self.data
 
-        add_metadata(data, self.year, self.week)
+        data = add_metadata(data, self.year, self.week)
         table = pa.Table.from_pandas(data, preserve_index=False)
         write_path = path / self.FILE
         pq.write_table(table, write_path)
